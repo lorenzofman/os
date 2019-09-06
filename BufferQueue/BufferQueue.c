@@ -23,7 +23,7 @@ struct BufferQueue
 */
 struct BufferQueue* CreateBuffer(int size)
 {
-	BufferQueue* bufferQueue = (BufferQueue*)malloc(sizeof(BufferQueue));
+	struct BufferQueue* bufferQueue = (struct BufferQueue*)malloc(sizeof(struct BufferQueue));
 	if (bufferQueue == NULL)
 	{
 		return NULL;
@@ -40,7 +40,7 @@ struct BufferQueue* CreateBuffer(int size)
 	return bufferQueue;
 }
 
-void DestroyBuffer(BufferQueue* queue)
+void DestroyBuffer(struct BufferQueue* queue)
 {
 	free(queue->buffer);
 	free(queue);
@@ -141,7 +141,7 @@ void PrintBufferQueue(struct BufferQueue* bufferQueue)
 	}
 }
 
-void TestBufferQueue(BufferQueue* queue)
+void TestBufferQueue(struct BufferQueue* queue)
 {
 	srand(time(0));
 	int numberOfSegments = rand() % MAXPACKETS;
@@ -180,6 +180,6 @@ void TestBufferQueue(BufferQueue* queue)
 
 int main()
 {
-	BufferQueue* queue = CreateBuffer(BUFFERSIZE);
+	struct BufferQueue* queue = CreateBuffer(BUFFERSIZE);
 	TestBufferQueue(queue);
 }

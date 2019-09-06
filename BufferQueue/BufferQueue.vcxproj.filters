@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BufferQueue.cpp">
+    <ClCompile Include="BufferQueue.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
