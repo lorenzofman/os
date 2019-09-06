@@ -1,8 +1,11 @@
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
+#include <time.h>
 #include <memory.h>
+#define BUFFERSIZE 1024 * 1024 * 48
+#define MAXPACKETS 4
 /* 
-	[30][30 bytes][1][1 byte][4][4 bytes][-100][100 free bytes logically deleted][10][10 bytes]
+	[30][30 bytes][1][1 byte][4][4 bytes][10][10 bytes]
 */
 typedef unsigned char byte;
 struct BufferQueue
@@ -25,7 +28,7 @@ struct BufferQueue* CreateBuffer(int size)
 	{
 		return NULL;
 	}
-	bufferQueue->end = bufferQueue->start = (byte*)malloc(size * sizeof(byte));
+	bufferQueue->buffer = bufferQueue->end = bufferQueue->start = (byte*)malloc(size * sizeof(byte));
 	if (bufferQueue->end == NULL) 
 	{
 		free(bufferQueue);
@@ -37,14 +40,20 @@ struct BufferQueue* CreateBuffer(int size)
 	return bufferQueue;
 }
 
+void DestroyBuffer(BufferQueue* queue)
+{
+	free(queue->buffer);
+	free(queue);
+}
+
 /* Writes any data to buffer, just need their total length in bytes */
 void WriteData(struct BufferQueue* bufferQueue, void* data, int length)
 {
 	for (int i = 0; i < length; i++)
 	{
-		byte* realPos = (byte*)data + i;
+		byte* realPos = (byte*)bufferQueue->start + i;
 		byte* circularPos = (byte*)((int)realPos % (int)bufferQueue->buffer + bufferQueue->buffer);
-		*(bufferQueue->end++) = *circularPos;
+		*(bufferQueue->end++) = *((byte*)data + i);
 	}
 }
 
@@ -64,7 +73,7 @@ int Enqueue(struct BufferQueue* buffer, void* data, int dataLength)
 	}
 	WriteData(buffer, &totalRequiredSize, sizeof(int));
 	WriteData(buffer, data, dataLength);
-	buffer->usedSize += bytesCount;
+	buffer->usedSize += totalRequiredSize;
 	return 1;
 }
 
@@ -116,7 +125,7 @@ void PrintBufferQueue(struct BufferQueue* bufferQueue)
 		printf("Buffer size = %iGB\n", bufferSize / (1024 * 1024 * 1024));
 	}
 
-	printf("\nBuffer usage = %.2f%%\n\n", (float) bufferQueue->usedSize / bufferSize);
+	printf("\nBuffer usage = %.2f%%\n\n",100 * (float) bufferQueue->usedSize / bufferSize);
 
 	for (void* it = bufferQueue->start; it < bufferQueue->end;)
 	{
@@ -125,19 +134,52 @@ void PrintBufferQueue(struct BufferQueue* bufferQueue)
 		printf("Data (raw bytes): ");
 		for (int i = 0; i < bytesCount; i++)
 		{
-			putc(*((byte*)it + i), stdout);
+			putc(*((byte*)it + i + sizeof(int)), stdout);
 		}
 		printf("\n");
 		it = (byte*)it + bytesCount;
 	}
 }
 
+void TestBufferQueue(BufferQueue* queue)
+{
+	srand(time(0));
+	int numberOfSegments = rand() % MAXPACKETS;
+	printf("Test started\n");
+	printf("Number of packets to write to buffer = %i\n", numberOfSegments);
+	int numberOfWriteSegments;
+	char** data = (char**) malloc(numberOfSegments * sizeof(char*));
+	if (data == NULL)
+	{
+		return;
+	}
+	int* packetsSize = (int*) malloc(numberOfSegments * sizeof(int));
+	if (packetsSize == NULL)
+	{
+		free(data);
+		return;
+	}
+	for (int i = 0; i < numberOfSegments; i++)
+	{
+		packetsSize[i] = rand() % (queue->totalSize / numberOfSegments);
+		data[i] = (char*)malloc(packetsSize[i] * sizeof(char));
+		printf("Writing packet with size = %i and contents: ", packetsSize[i]);
+		for (int j = 0; j < packetsSize[i]; j++)
+		{
+			data[i][j] = (rand() % ('z' - 'a')) + 'a';
+			putc(data[i][j], stdout);
+		}
+		printf("\n");
+		if (Enqueue(queue, data[i], packetsSize[i]) == 0)
+		{
+			numberOfWriteSegments = i;
+		}
+	}
+	PrintBufferQueue(queue);
+}
+
 int main()
 {
-	BufferQueue* queue = CreateBuffer(1024);
-	const char* str = "My name is Lorenzo";
-	Enqueue(queue, (void*) str, 19 * sizeof(byte));
-	int data[] = { 0,1,2,3,4,5,6,7,8,9,10 };
-	Enqueue(queue, data, 11 * sizeof(int));
-	PrintBufferQueue(queue);
+	BufferQueue* queue = CreateBuffer(BUFFERSIZE);
+	TestBufferQueue(queue);
 }
