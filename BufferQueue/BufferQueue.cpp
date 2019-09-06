@@ -7,8 +7,9 @@
 typedef unsigned char byte;
 struct BufferQueue
 {
-	byte *start;
-	byte *end;
+	byte* buffer;
+	byte* start;
+	byte* end;
 	int usedSize;
 	int totalSize;
 };
@@ -41,7 +42,9 @@ void WriteData(struct BufferQueue* bufferQueue, void* data, int length)
 {
 	for (int i = 0; i < length; i++)
 	{
-		*(bufferQueue->end++) = *((byte*)data + i);
+		byte* realPos = (byte*)data + i;
+		byte* circularPos = (byte*)((int)realPos % (int)bufferQueue->buffer + bufferQueue->buffer);
+		*(bufferQueue->end++) = *circularPos;
 	}
 }
 
@@ -69,7 +72,9 @@ void ReadData(struct BufferQueue* bufferQueue, void* buffer, int length)
 {
 	for (int i = 0; i < length; i++)
 	{
-		*((byte*)buffer + i) = *(bufferQueue->start++);
+		byte* realPos = (byte*)buffer + i;
+		byte* circularPos = (byte*)((int)realPos % (int)bufferQueue->buffer + bufferQueue->buffer);
+		*circularPos = *(bufferQueue->start++);
 	}
 }
 
