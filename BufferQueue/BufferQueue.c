@@ -1,21 +1,43 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <memory.h>
-#define BUFFERSIZE 1024 * 1024 * 48
-#define MAXPACKETS 4
+#include <ctype.h>
+#include <stdbool.h>
+
+#define BUFFERSIZE 16
+#define MAXPACKETS 1024
+#define DEBUG
 /* 
 	[30][30 bytes][1][1 byte][4][4 bytes][10][10 bytes]
 */
 typedef unsigned char byte;
 struct BufferQueue
 {
-	byte* buffer;
-	byte* start;
-	byte* end;
+	byte* buffer; /* Buffer start position (static)*/
+	byte* start; /* Dequeue start position */
+	byte* end; /* Enqueue start position */
 	int usedSize;
 	int totalSize;
 };
+
+void ClampBufferQueue(struct BufferQueue* queue)
+{
+	queue->start = (queue->start - queue->buffer) % queue->totalSize + queue->buffer;
+	queue->end = (queue->end - queue->buffer) % queue->totalSize + queue->buffer;
+}
+
+void IncrementStart(struct BufferQueue* queue)
+{
+	queue->start++;
+	ClampBufferQueue(queue);
+}
+
+void IncrementEnd(struct BufferQueue* queue)
+{
+	queue->end++;
+	ClampBufferQueue(queue);
+}
 
 /* 
 	Creates a Queue that is stored in a fixed length memory block 
@@ -46,21 +68,20 @@ void DestroyBuffer(struct BufferQueue* queue)
 	free(queue);
 }
 
-/* Writes any data to buffer, just need their total length in bytes */
-void WriteData(struct BufferQueue* bufferQueue, void* data, int length)
+/* Writes any data to buffer, using data total length in bytes */
+void WriteData(struct BufferQueue* bufferQueue, byte* data, int length)
 {
 	for (int i = 0; i < length; i++)
 	{
-		byte* realPos = (byte*)bufferQueue->start + i;
-		byte* circularPos = (byte*)((int)realPos % (int)bufferQueue->buffer + bufferQueue->buffer);
-		*(bufferQueue->end++) = *((byte*)data + i);
+		*bufferQueue->end = *(data + i);
+		IncrementEnd(bufferQueue);
 	}
 }
 
 /*
 	Given the buffer to insert, a pointer to data and the data length (in bytes) this method inserts it into the buffer queue.
 	An integer is added as a header to every buffer indicating their length
-	The resulting integer is whether the operation worked or the buffer has not enough capacity for the new data
+	The returning integer is whether the operation worked or the buffer has not enough capacity for the new data
 */
 int Enqueue(struct BufferQueue* buffer, void* data, int dataLength)
 {
@@ -71,19 +92,18 @@ int Enqueue(struct BufferQueue* buffer, void* data, int dataLength)
 	{
 		return 0;
 	}
-	WriteData(buffer, &totalRequiredSize, sizeof(int));
+	WriteData(buffer, &dataLength, sizeof(int));
 	WriteData(buffer, data, dataLength);
 	buffer->usedSize += totalRequiredSize;
 	return 1;
 }
 
-void ReadData(struct BufferQueue* bufferQueue, void* buffer, int length)
+void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length)
 {
 	for (int i = 0; i < length; i++)
 	{
-		byte* realPos = (byte*)buffer + i;
-		byte* circularPos = (byte*)((int)realPos % (int)bufferQueue->buffer + bufferQueue->buffer);
-		*circularPos = *(bufferQueue->start++);
+		*(buffer + i) = *bufferQueue->start;
+		IncrementStart(bufferQueue);
 	}
 }
 
@@ -100,8 +120,52 @@ int Dequeue(struct BufferQueue* bufferQueue, void * buffer, int bufferSize)
 		return 0;
 	}
 	ReadData(bufferQueue, buffer, bytesCount);
-	bufferQueue->usedSize -= bytesCount;
+	bufferQueue->usedSize -= bytesCount + sizeof(int);
 	return bytesCount;
+}
+/* Prints the buffer array with colors */
+void PrintBufferRawBytes(struct BufferQueue* queue)
+{
+	bool freeArea = true;
+	bool started = false;
+	bool ended = false;
+	int rawBytesToRead = 0;
+	for (int i = 0; i < queue->totalSize; i++)
+	{
+		if ((queue->buffer + i) == queue->start && started == false)
+		{
+			freeArea = false;
+			started = true;
+			printf("<");
+		}
+		if ((queue->buffer + i) == queue->end && ended == false)
+		{
+			freeArea = true;
+			ended = true;
+			printf(">");
+		}
+		
+		if (freeArea)
+		{
+			printf("#");
+		}
+		else 
+		{
+			if (rawBytesToRead == 0)
+			{
+				byte* pos = queue->buffer + i;
+				rawBytesToRead = *(int*) pos;
+				printf("|%i|", rawBytesToRead);
+				i += sizeof(int) - 1;
+			}
+			else 
+			{
+				printf("%c", *(queue->buffer + i));
+				rawBytesToRead--;
+			}
+		}
+	}
+	printf("\n");
 }
 
 void PrintBufferQueue(struct BufferQueue* bufferQueue)
@@ -126,60 +190,30 @@ void PrintBufferQueue(struct BufferQueue* bufferQueue)
 	}
 
 	printf("\nBuffer usage = %.2f%%\n\n",100 * (float) bufferQueue->usedSize / bufferSize);
-
-	for (void* it = bufferQueue->start; it < bufferQueue->end;)
-	{
-		int bytesCount = *(int*)it;
-		printf("Block allocated with %i bytes\n", bytesCount);
-		printf("Data (raw bytes): ");
-		for (int i = 0; i < bytesCount; i++)
-		{
-			putc(*((byte*)it + i + sizeof(int)), stdout);
-		}
-		printf("\n");
-		it = (byte*)it + bytesCount;
-	}
-}
-
-void TestBufferQueue(struct BufferQueue* queue)
-{
-	srand(time(0));
-	int numberOfSegments = rand() % MAXPACKETS;
-	printf("Test started\n");
-	printf("Number of packets to write to buffer = %i\n", numberOfSegments);
-	int numberOfWriteSegments;
-	char** data = (char**) malloc(numberOfSegments * sizeof(char*));
-	if (data == NULL)
-	{
-		return;
-	}
-	int* packetsSize = (int*) malloc(numberOfSegments * sizeof(int));
-	if (packetsSize == NULL)
-	{
-		free(data);
-		return;
-	}
-	for (int i = 0; i < numberOfSegments; i++)
-	{
-		packetsSize[i] = rand() % (queue->totalSize / numberOfSegments);
-		data[i] = (char*)malloc(packetsSize[i] * sizeof(char));
-		printf("Writing packet with size = %i and contents: ", packetsSize[i]);
-		for (int j = 0; j < packetsSize[i]; j++)
-		{
-			data[i][j] = (rand() % ('z' - 'a')) + 'a';
-			putc(data[i][j], stdout);
-		}
-		printf("\n");
-		if (Enqueue(queue, data[i], packetsSize[i]) == 0)
-		{
-			numberOfWriteSegments = i;
-		}
-	}
-	PrintBufferQueue(queue);
 }
 
 int main()
 {
+	char aBuf[3];
+	char bBuf[4];
+	char cBuf[3];
 	struct BufferQueue* queue = CreateBuffer(BUFFERSIZE);
-	TestBufferQueue(queue);
+	Enqueue(queue, "aaa", 3);
+	PrintBufferRawBytes(queue);
+
+	Enqueue(queue, "bbbb", 4);
+	PrintBufferRawBytes(queue);
+
+	Dequeue(queue, aBuf, 3);
+	PrintBufferRawBytes(queue);
+
+	Enqueue(queue, "ccc", 3);
+	PrintBufferRawBytes(queue);
+
+	Dequeue(queue, bBuf, 4);
+	PrintBufferRawBytes(queue);
+
+	Dequeue(queue, cBuf, 3);
+	PrintBufferRawBytes(queue);
+
 }
