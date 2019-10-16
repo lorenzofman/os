@@ -18,5 +18,13 @@
     <ClCompile Include="BufferQueue.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TrivialBenchmark.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Benchmarker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
