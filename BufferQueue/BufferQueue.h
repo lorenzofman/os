@@ -1,14 +1,15 @@
-#define HAVE_STRUCT_TIMESPEC
-#include <pthread.h>
 #ifndef BUFFERQUEUE
 #define BUFFERQUEUE
-
+#define HAVE_STRUCT_TIMESPEC
+#include <pthread.h>
 typedef unsigned char byte;
 struct BufferQueue
 {
 	byte* buffer; /* Buffer start position (static)*/
 	byte* start; /* Dequeue start position */
 	byte* end; /* Enqueue start position */
+	pthread_mutex_t enqueueLock;
+	pthread_mutex_t dequeueLock;
 	int usedSize;
 	int capacity;
 };
@@ -29,13 +30,5 @@ void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length);
 
 int Dequeue(struct BufferQueue* bufferQueue, void* buffer, int bufferSize);
 
-
-void WriteData(struct BufferQueue* bufferQueue, byte* data, int length);
-
-int Enqueue(struct BufferQueue* buffer, byte* data, int dataLength);
-
-void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length);
-
-int Dequeue(struct BufferQueue* bufferQueue, void* buffer, int bufferSize);
 
 #endif // ! BUFFERQUEUE
