@@ -7,14 +7,20 @@
 void IncrementStart(struct BufferQueue* queue, int amount)
 {
 	queue->start += amount;
-	queue->start = (queue->start - queue->buffer) % queue->totalSize + queue->buffer;
+	if (queue->start > queue->buffer + queue->capacity)
+	{
+		queue->start -= queue->capacity;
+	}
 }
 
 
 void IncrementEnd(struct BufferQueue* queue, int amount)
 {
 	queue->end += amount;
-	queue->end = (queue->end - queue->buffer) % queue->totalSize + queue->buffer;
+	if (queue->end > queue->buffer + queue->capacity)
+	{
+		queue->end -= queue->capacity;
+	}
 }
 
 /*
@@ -35,7 +41,7 @@ struct BufferQueue* CreateBuffer(int size)
 		return NULL;
 	}
 	memset(bufferQueue->start, 0, size);
-	bufferQueue->totalSize = size;
+	bufferQueue->capacity = size;
 	bufferQueue->usedSize = 0;
 	return bufferQueue;
 }
@@ -50,14 +56,19 @@ void DestroyBuffer(struct BufferQueue* queue)
 void WriteData(struct BufferQueue* bufferQueue, byte* data, int length)
 {
 	byte* resultingEnd = bufferQueue->end + length;
-	byte* realEnd = bufferQueue->buffer + bufferQueue->totalSize;
-	byte* remainingBytes = resultingEnd - bufferQueue->end;
-	if (resultingEnd > realEnd)
+	byte* bufferCapacity = bufferQueue->buffer + bufferQueue->capacity;
+	int remainingBytes = resultingEnd - bufferCapacity;
+	if (remainingBytes > 0)
 	{
-		memcpy(bufferQueue->buffer, data + (int)remainingBytes, realEnd - resultingEnd);
+		memcpy(bufferQueue->end, data, length - remainingBytes);
+		
+		int dataStart = length - remainingBytes;
+		memcpy(bufferQueue->buffer, data + dataStart, remainingBytes);
 	}
-	memcpy(bufferQueue->end, data, min(remainingBytes, length));
-
+	else
+	{
+		memcpy(bufferQueue->end, data, length);
+	}
 	IncrementEnd(bufferQueue, length);
 }
 
@@ -70,12 +81,12 @@ int Enqueue(struct BufferQueue* buffer, byte* data, int dataLength)
 {
 	int bytesCount = sizeof(int);
 	int totalRequiredSize = dataLength + bytesCount;
-	int freeBufferSpace = buffer->totalSize - buffer->usedSize;
+	int freeBufferSpace = buffer->capacity - buffer->usedSize;
 	if (totalRequiredSize > freeBufferSpace)
 	{
 		return 0;
 	}
-	WriteData(buffer, &dataLength, sizeof(int));
+	WriteData(buffer, (byte*) &dataLength, sizeof(int));
 	WriteData(buffer, data, dataLength);
 	buffer->usedSize += totalRequiredSize;
 	return 1;
@@ -84,14 +95,19 @@ int Enqueue(struct BufferQueue* buffer, byte* data, int dataLength)
 void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length)
 {
 	byte* resultingStart = bufferQueue->start + length;
-	byte* realEnd = bufferQueue->buffer + bufferQueue->totalSize;
-	byte* remainingBytes = resultingStart - bufferQueue->end;
-	if (resultingStart > realEnd)
+	byte* bufferCapacity = bufferQueue->buffer + bufferQueue->capacity;
+	int remainingBytes = resultingStart - bufferCapacity;
+	if (remainingBytes > 0)
 	{
-		memcpy(buffer + (int)remainingBytes, bufferQueue->buffer, realEnd - resultingStart);
-	}
-	memcpy(buffer, bufferQueue->start, min(remainingBytes, length));
+		memcpy(buffer, bufferQueue->start, length - remainingBytes);
 
+		int dataStart = length - remainingBytes;
+		memcpy(buffer + dataStart, bufferQueue->buffer, remainingBytes);
+	}
+	else
+	{
+		memcpy(buffer, bufferQueue->start, length);
+	}
 	IncrementStart(bufferQueue, length);
 }
 
@@ -102,12 +118,12 @@ void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length)
 int Dequeue(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
 	int bytesCount;
-	ReadData(bufferQueue, &bytesCount, sizeof(int));
+	ReadData(bufferQueue, (byte*) &bytesCount, sizeof(int));
 	if (bytesCount > bufferSize)
 	{
 		return 0;
 	}
-	ReadData(bufferQueue, buffer, bytesCount);
+	ReadData(bufferQueue, (byte*)buffer, bytesCount);
 	bufferQueue->usedSize -= bytesCount + sizeof(int);
 	return bytesCount;
 }

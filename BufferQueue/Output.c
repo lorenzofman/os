@@ -1,15 +1,13 @@
-#define HAVE_STRUCT_TIMESPEC
-#include <pthread.h>
 #include "BufferQueue.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <Windows.h>
-#define BUFFERSIZE 1024 * 1024 * 512
-#define BLOCKSIZE (1024 * 1024 * 4 - 4) // 1KB - Header
+#define BUFFERSIZE 1024
+#define BLOCKSIZE (1024 - 4) // 1KB - Header
 
 char* SizeString(long long i)
 {
-	char* buffer = (char*)malloc(sizeof(char) * 5);
+	char* buffer = malloc(sizeof(char) * 5);
 	if (buffer == NULL)
 	{
 		return "ERROR";
@@ -28,7 +26,7 @@ char* SizeString(long long i)
 	}
 	else
 	{
-		sprintf(buffer, "%lfGB", (double) i / ((double)1024 * 1024 * 1024));
+		sprintf(buffer, "%lfGB", (double) i / (1024 * 1024 * 1024));
 	}
 	return buffer;
 }
@@ -42,7 +40,7 @@ void FileBenchmark()
 	int lines = 0;
 	while (fgets(buffer, 1024, input) != NULL) 
 	{
-		Enqueue(queue, (byte*)buffer, strlen(buffer) + 1);
+		Enqueue(queue, buffer, strlen(buffer) + 1);
 		lines++;
 		Dequeue(queue, buffer, 1024);
 		fputs(buffer, output);
@@ -51,12 +49,14 @@ void FileBenchmark()
 
 int main()
 {
+	FileBenchmark();
+	return;
 	struct BufferQueue* queue = CreateBuffer(BUFFERSIZE);
 	int blocks = BUFFERSIZE / BLOCKSIZE;
-	byte* data = (byte*)malloc(BLOCKSIZE * sizeof(byte));
+	byte* data = malloc(BLOCKSIZE * sizeof(byte));
 	if (data == NULL)
 	{
-		return 0;
+		return;
 	}
 	LARGE_INTEGER frequency;
 	LARGE_INTEGER t1, t2;
