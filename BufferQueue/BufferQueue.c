@@ -44,8 +44,9 @@ struct BufferQueue* CreateBuffer(int size)
 	memset(bufferQueue->start, 0, size);
 	bufferQueue->capacity = size;
 	bufferQueue->usedSize = 0;
-	pthread_mutex_init(&bufferQueue->dequeueLock, NULL);
-	pthread_mutex_init(&bufferQueue->enqueueLock, NULL);
+	//pthread_mutex_init(&bufferQueue->dequeueLock, NULL);
+	//pthread_mutex_init(&bufferQueue->enqueueLock, NULL);
+	//pthread_mutex_init(&bufferQueue->usedSizeLock, NULL);
 	return bufferQueue;
 }
 

@@ -1,4 +1,5 @@
-ARGS= -O2 -std=c11 -pthread
+ARGS=-std=c11 -pthread
+OARGS=-t
 OUTPUT=Program
 ITERATIONS=42
 all: main run
@@ -11,5 +12,7 @@ BufferQueue.o: BufferQueue.c
 clean: rm *.o
 run: 
 	./$(OUTPUT)
-benchmark: all
+threads: main
+	./$(OUTPUT) ${OARGS}
+benchmark: main
 	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT); done"

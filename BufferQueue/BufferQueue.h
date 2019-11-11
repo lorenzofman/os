@@ -10,6 +10,7 @@ struct BufferQueue
 	byte* end; /* Enqueue start position */
 	pthread_mutex_t enqueueLock;
 	pthread_mutex_t dequeueLock;
+	pthread_mutex_t usedSizeLock;
 	int usedSize;
 	int capacity;
 };

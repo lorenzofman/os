@@ -31,19 +31,19 @@ void WriteDataThread(struct BufferQueue* bufferQueue, byte* data, int length)
 */
 int EnqueueThread(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
-    pthread_mutex_lock(&bufferQueue->enqueueLock);
+    //pthread_mutex_lock(&bufferQueue->enqueueLock);
 	int bytesCount = sizeof(int);
 	int totalRequiredSize = dataLength + bytesCount;
 	int freeBufferSpace = bufferQueue->capacity - bufferQueue->usedSize;
 	if (totalRequiredSize > freeBufferSpace)
 	{
-        pthread_mutex_unlock(&bufferQueue->enqueueLock);
+        //pthread_mutex_unlock(&bufferQueue->enqueueLock);
 		return 0;
 	}
 	WriteData(bufferQueue, (byte*) &dataLength, sizeof(int));
 	WriteData(bufferQueue, data, dataLength);
 	bufferQueue->usedSize += totalRequiredSize;
-    pthread_mutex_unlock(&bufferQueue->enqueueLock);
+    //pthread_mutex_unlock(&bufferQueue->enqueueLock);
 	return 1;
 }
 
@@ -72,6 +72,14 @@ void ReadDataThread(struct BufferQueue* bufferQueue, byte* buffer, int length)
 */
 int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
+	pthread_mutex_lock(&bufferQueue->usedSizeLock);
+	if(bufferQueue->usedSize == 0)
+	{
+		pthread_mutex_unlock(&bufferQueue->usedSizeLock);
+		return 0;
+	}
+	pthread_mutex_unlock(&bufferQueue->usedSizeLock);
+
     pthread_mutex_lock(&bufferQueue->dequeueLock);
 	int bytesCount;
 	ReadData(bufferQueue, (byte*) &bytesCount, sizeof(int));
@@ -81,7 +89,11 @@ int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 		return 0;
 	}
 	ReadData(bufferQueue, (byte*)buffer, bytesCount);
-	bufferQueue->usedSize -= bytesCount + sizeof(int);
 	pthread_mutex_unlock(&bufferQueue->dequeueLock);
+
+	pthread_mutex_lock(&bufferQueue->usedSizeLock);
+	bufferQueue->usedSize -= bytesCount + sizeof(int);
+	pthread_mutex_unlock(&bufferQueue->usedSizeLock);
+
     return bytesCount;
 }

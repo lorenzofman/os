@@ -5,12 +5,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #define READERS 1
 #define WRITERS 1
-#define BUFFERSIZE 1024 * 1024 * 256
-#define BLOCKSIZE (1024 * 1024 * 256 - 4) // 1KB - Header
-#define USETHREADS
-#define WAITIME 1000000000000L
+#define BUFFERSIZE 1024 * 1024 * 4
+#define BLOCKSIZE (1024 - 4)
+#define WAITIME 1
+static pthread_mutex_t printf_mutex;
+
+int SyncPrintf(const char *format, ... )
+{
+	int result = 0;
+    va_list args;
+    va_start(args, format);
+
+    pthread_mutex_lock(&printf_mutex);
+	result = vprintf(format, args);
+    pthread_mutex_unlock(&printf_mutex);
+
+    va_end(args);
+	return result;
+}
 
 struct QueueParameter
 {
@@ -43,24 +58,7 @@ char* SizeString(long long i)
 	}
 	return buffer;
 }
-/*
-void FileBenchmark()
-{
-	FILE* input = fopen("TrivialBenchmark.c", "r");
-	FILE* output = fopen("Output.c", "wb");
-	struct BufferQueue* queue = CreateBuffer(BUFFERSIZE);
-	char buffer[1024];
-	int lines = 0;
-	while (fgets(buffer, 1024, input) != NULL) 
-	{
-		Enqueue(queue, (byte*)buffer, strlen(buffer) + 1);
-		lines++;
-		Dequeue(queue, buffer, 1024);
-		fputs(buffer, output);
-	}
-}
-*/
-#ifdef USETHREADS
+
 
 void *EnqueueData(void* varg)
 {
@@ -106,10 +104,10 @@ void *DequeueData(void* varg)
 	}
 }
 
-int main()
+int ThreadBenchmark()
 {
 	struct BufferQueue* bufferQueue = CreateBuffer(BUFFERSIZE);
-
+	pthread_mutex_init(&printf_mutex, NULL);
 	pthread_t* readers = (pthread_t*)malloc(sizeof(pthread_t) * READERS);
 	pthread_t* writers = (pthread_t*)malloc(sizeof(pthread_t) * WRITERS);
 	
@@ -140,35 +138,57 @@ int main()
 	double result = (double)BUFFERSIZE / elapsedTime;
 	long long throughput = (long long) (result);
 	printf("Velocity = %s/s\n", SizeString(throughput));
+	return 0;
 }
 
-#else
-
-int main()
+int Benchmark()
 {
 	struct BufferQueue* queue = CreateBuffer(BUFFERSIZE);
 	int blocks = BUFFERSIZE / BLOCKSIZE;
 	byte* data = (byte*)malloc(BLOCKSIZE * sizeof(byte));
 	if (data == NULL)
 	{
-		return 0;
+		return 1;
 	}
-	clock_t start = clock();
-	for (int i = 0; i < blocks; i++)
-	{
-		EnqueueThread(queue, data, BLOCKSIZE);
-	}
+
 
 	for (int i = 0; i < blocks; i++)
 	{
-		DequeueThread(queue, data, BLOCKSIZE);
+		Enqueue(queue, data, BLOCKSIZE);
+	}
+	clock_t start = clock();
+
+	for (int i = 0; i < blocks; i++)
+	{
+		Dequeue(queue, data, BLOCKSIZE);
 	}
 
 	clock_t end = clock();
+
 	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
 	double result = (double)BUFFERSIZE / elapsedTime;
 	long long throughput = (long long) (result);
-	printf("Velocity = %s/s\n", SizeString(throughput));
+	printf("Time: %lf ms\n", elapsedTime * 1000);
+	printf("Payload: %s\n", SizeString(BUFFERSIZE));
+	printf("Velocity: %s/s\n", SizeString(throughput));
+	DestroyBuffer(queue);
+	free(data);
+	return 0;
 }
 
-#endif
+int main(int argc, char *argv[])
+{
+	if(argc > 0)
+	{
+		for(int i = 0; i < argc; i++)
+		{
+			if(strcmp(argv[i], "-t") == 0)
+			{
+				printf("Threaded Benchmark\n");
+				return ThreadBenchmark();
+			}
+		}
+	}
+	printf("Non-threaded Benchmark\n");
+	return Benchmark();
+}
