@@ -5,27 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #define READERS 1
 #define WRITERS 1
-#define BUFFERSIZE 1024 * 1024 * 4
-#define BLOCKSIZE (1024 - 4)
+#define BUFFERSIZE 32
+#define BLOCKSIZE (8 - 4)
 #define WAITIME 1
-static pthread_mutex_t printf_mutex;
-
-int SyncPrintf(const char *format, ... )
-{
-	int result = 0;
-    va_list args;
-    va_start(args, format);
-
-    pthread_mutex_lock(&printf_mutex);
-	result = vprintf(format, args);
-    pthread_mutex_unlock(&printf_mutex);
-
-    va_end(args);
-	return result;
-}
 
 struct QueueParameter
 {
@@ -63,51 +47,26 @@ char* SizeString(long long i)
 void *EnqueueData(void* varg)
 {
 	struct QueueParameter* queueParameter = (struct QueueParameter*) varg;
-	int blocks = BUFFERSIZE / BLOCKSIZE;
+	int blocks = BUFFERSIZE / (BLOCKSIZE + sizeof(int));
 	for (int i = 0; i < blocks; i++)
 	{
-		while(1)
-		{
-			int result = EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
-			if(result == 0)
-			{
-				struct timespec ts = {0, WAITIME };
-				nanosleep(&ts, NULL);
-			}
-			else
-			{
-				break;
-			}
-		}
+		EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, i);
 	}
 
 }
 void *DequeueData(void* varg)
 {
 	struct QueueParameter* queueParameter = (struct QueueParameter*) varg;
-	int blocks = BUFFERSIZE / BLOCKSIZE;
+	int blocks = BUFFERSIZE / (BLOCKSIZE + sizeof(int));
 	for (int i = 0; i < blocks; i++)
 	{
-		while(1)
-		{
-			int result = DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
-			if(result == 0)
-			{
-				struct timespec ts = {0, WAITIME };
-				nanosleep(&ts, NULL);
-			}
-			else
-			{
-				break;
-			}
-		}
+		DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, i);
 	}
 }
 
 int ThreadBenchmark()
 {
-	struct BufferQueue* bufferQueue = CreateBuffer(BUFFERSIZE);
-	pthread_mutex_init(&printf_mutex, NULL);
+	struct BufferQueue* bufferQueue = CreateBufferThreaded(BUFFERSIZE);
 	pthread_t* readers = (pthread_t*)malloc(sizeof(pthread_t) * READERS);
 	pthread_t* writers = (pthread_t*)malloc(sizeof(pthread_t) * WRITERS);
 	

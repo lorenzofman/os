@@ -1,8 +1,11 @@
 #include "BufferQueue.h"
-void WriteDataThread(struct BufferQueue* bufferQueue, byte* data, int length);
 
-int EnqueueThread(struct BufferQueue* buffer, byte* data, int dataLength);
+struct BufferQueue* CreateBufferThreaded(int size);
 
-void ReadDataThread(struct BufferQueue* bufferQueue, byte* buffer, int length);
+void WriteDataAsync(struct BufferQueue* bufferQueue, byte * enqueuePosition, byte* data, int length);
 
-int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize);
+int EnqueueThread(struct BufferQueue* buffer, byte* data, int dataLength, int idx);
+
+void ReadDataAsync(struct BufferQueue* bufferQueue, byte* dequeuePosition, byte* buffer, int length);
+
+int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize, int idx);

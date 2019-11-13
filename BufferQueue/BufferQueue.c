@@ -5,23 +5,25 @@
 #include <time.h>
 #include <memory.h>
 
-void IncrementStart(struct BufferQueue* queue, int amount)
+byte* IncrementedPointer(struct BufferQueue* queue, byte* pointer, int amount)
 {
-	queue->start += amount;
-	if (queue->start > queue->buffer + queue->capacity)
+	pointer += amount;
+	if (pointer > queue->buffer + queue->capacity)
 	{
-		queue->start -= queue->capacity;
+		pointer -= queue->capacity;
 	}
+	return pointer;
+}
+
+void IncrementDequeue(struct BufferQueue* queue, int amount)
+{
+	queue->dequeue = IncrementedPointer(queue, queue->dequeue, amount);
 }
 
 
-void IncrementEnd(struct BufferQueue* queue, int amount)
+void IncrementEnqueue(struct BufferQueue* queue, int amount)
 {
-	queue->end += amount;
-	if (queue->end > queue->buffer + queue->capacity)
-	{
-		queue->end -= queue->capacity;
-	}
+	queue->enqueue = IncrementedPointer(queue, queue->enqueue, amount);
 }
 
 /*
@@ -35,18 +37,16 @@ struct BufferQueue* CreateBuffer(int size)
 	{
 		return NULL;
 	}
-	bufferQueue->buffer = bufferQueue->end = bufferQueue->start = (byte*)malloc(size * sizeof(byte));
-	if (bufferQueue->end == NULL)
+	bufferQueue->buffer = bufferQueue->enqueue = bufferQueue->dequeue = (byte*)malloc(size * sizeof(byte));
+	if (bufferQueue->enqueue == NULL)
 	{
 		free(bufferQueue);
 		return NULL;
 	}
-	memset(bufferQueue->start, 0, size);
+	memset(bufferQueue->dequeue, 0, size);
 	bufferQueue->capacity = size;
-	bufferQueue->usedSize = 0;
-	//pthread_mutex_init(&bufferQueue->dequeueLock, NULL);
-	//pthread_mutex_init(&bufferQueue->enqueueLock, NULL);
-	//pthread_mutex_init(&bufferQueue->usedSizeLock, NULL);
+	bufferQueue->usedBytes  = 0;
+	
 	return bufferQueue;
 }
 
@@ -59,21 +59,21 @@ void DestroyBuffer(struct BufferQueue* queue)
 /* Writes any data to buffer, using data total length in bytes */
 void WriteData(struct BufferQueue* bufferQueue, byte* data, int length)
 {
-	byte* resultingEnd = bufferQueue->end + length;
+	byte* resultingEnd = bufferQueue->enqueue + length;
 	byte* bufferCapacity = bufferQueue->buffer + bufferQueue->capacity;
 	int remainingBytes = resultingEnd - bufferCapacity;
 	if (remainingBytes > 0)
 	{
-		memcpy(bufferQueue->end, data, length - remainingBytes);
+		memcpy(bufferQueue->enqueue, data, length - remainingBytes);
 		
 		int dataStart = length - remainingBytes;
 		memcpy(bufferQueue->buffer, data + dataStart, remainingBytes);
 	}
 	else
 	{
-		memcpy(bufferQueue->end, data, length);
+		memcpy(bufferQueue->enqueue, data, length);
 	}
-	IncrementEnd(bufferQueue, length);
+	IncrementEnqueue(bufferQueue, length);
 }
 
 /*
@@ -85,34 +85,34 @@ int Enqueue(struct BufferQueue* buffer, byte* data, int dataLength)
 {
 	int bytesCount = sizeof(int);
 	int totalRequiredSize = dataLength + bytesCount;
-	int freeBufferSpace = buffer->capacity - buffer->usedSize;
+	int freeBufferSpace = buffer->capacity - buffer->usedBytes;
 	if (totalRequiredSize > freeBufferSpace)
 	{
 		return 0;
 	}
 	WriteData(buffer, (byte*) &dataLength, sizeof(int));
 	WriteData(buffer, data, dataLength);
-	buffer->usedSize += totalRequiredSize;
+	buffer->usedBytes += totalRequiredSize;
 	return 1;
 }
 
 void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length)
 {
-	byte* resultingStart = bufferQueue->start + length;
+	byte* resultingStart = bufferQueue->dequeue + length;
 	byte* bufferCapacity = bufferQueue->buffer + bufferQueue->capacity;
 	int remainingBytes = resultingStart - bufferCapacity;
 	if (remainingBytes > 0)
 	{
-		memcpy(buffer, bufferQueue->start, length - remainingBytes);
+		memcpy(buffer, bufferQueue->dequeue, length - remainingBytes);
 
 		int dataStart = length - remainingBytes;
 		memcpy(buffer + dataStart, bufferQueue->buffer, remainingBytes);
 	}
 	else
 	{
-		memcpy(buffer, bufferQueue->start, length);
+		memcpy(buffer, bufferQueue->dequeue, length);
 	}
-	IncrementStart(bufferQueue, length);
+	IncrementDequeue(bufferQueue, length);
 }
 
 /*
@@ -128,7 +128,7 @@ int Dequeue(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 		return 0;
 	}
 	ReadData(bufferQueue, (byte*)buffer, bytesCount);
-	bufferQueue->usedSize -= bytesCount + sizeof(int);
+	bufferQueue->usedBytes -= bytesCount + sizeof(int);
 	return bytesCount;
 }
 

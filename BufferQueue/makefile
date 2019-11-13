@@ -4,7 +4,7 @@ OUTPUT=Program
 ITERATIONS=42
 all: main run
 main: BufferQueue.o BufferQueueThread.o
-	gcc BufferQueue.o BufferQueueThread.o TrivialBenchmark.c -o $(OUTPUT) -pthread
+	gcc BufferQueue.o BufferQueueThread.o Benchmark.c -o $(OUTPUT) -pthread
 BufferQueueThread.o: BufferQueueThread.c BufferQueue.o
 	gcc -c BufferQueue.o BufferQueueThread.c $(ARGS)
 BufferQueue.o: BufferQueue.c
@@ -15,4 +15,4 @@ run:
 threads: main
 	./$(OUTPUT) ${OARGS}
 benchmark: main
-	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT); done"
+	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT) ${OARGS}; done"

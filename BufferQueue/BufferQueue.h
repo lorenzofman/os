@@ -6,18 +6,24 @@ typedef unsigned char byte;
 struct BufferQueue
 {
 	byte* buffer; /* Buffer start position (static)*/
-	byte* start; /* Dequeue start position */
-	byte* end; /* Enqueue start position */
-	pthread_mutex_t enqueueLock;
-	pthread_mutex_t dequeueLock;
-	pthread_mutex_t usedSizeLock;
-	int usedSize;
+	byte* dequeue; /* Dequeue start position */
+	byte* enqueue; /* Enqueue start position */
+	int usedBytes;
+	int readBytes;
+	int writtenBytes;
 	int capacity;
+	pthread_mutex_t dequeueLock;
+	pthread_mutex_t enqueueLock;
+	pthread_mutex_t usedBytesLock;
+	pthread_mutex_t readBytesLock;
+	pthread_mutex_t writtenBytesLock;
 };
 
-void IncrementStart(struct BufferQueue* queue, int amount);
+byte* IncrementedPointer(struct BufferQueue* queue, byte* pointer, int amount);
 
-void IncrementEnd(struct BufferQueue* queue, int amount);
+void IncrementDequeue(struct BufferQueue* queue, int amount);
+
+void IncrementEnqueue(struct BufferQueue* queue, int amount);
 
 struct BufferQueue* CreateBuffer(int size);
 
