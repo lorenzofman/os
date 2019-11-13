@@ -14,5 +14,7 @@ run:
 	./$(OUTPUT)
 threads: main
 	./$(OUTPUT) ${OARGS}
-benchmark: main
+benchmark: main 
+	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT); done"
+benchmarkThreads: main 
 	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT) ${OARGS}; done"
