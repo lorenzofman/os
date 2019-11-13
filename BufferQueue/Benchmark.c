@@ -56,7 +56,7 @@ void *EnqueueData(void* varg)
 	{
 		for(int j = 0; j < blocksPerWriter; j++)
 		{
-			EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerWriter + j + i * blocks);
+			EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerWriter + j + fillRepetitions * blocks);
 		}
 	}
 
