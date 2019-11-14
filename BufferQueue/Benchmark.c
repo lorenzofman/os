@@ -5,13 +5,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define READERS 2
-#define WRITERS 2
-#define BUFFERSIZE 128
-#define BLOCKSIZE (32 - 4)
-#define WAITIME 1
-
-int fillRepetitions = 2;
+#define READERS 4
+#define WRITERS 4
+#define BUFFERSIZE 1024 * 4
+#define BLOCKSIZE (1024 - 4)
 
 struct QueueParameter
 {
@@ -52,12 +49,9 @@ void *EnqueueData(void* varg)
 	struct QueueParameter* queueParameter = (struct QueueParameter*) varg;
 	int blocks = BUFFERSIZE / (BLOCKSIZE + sizeof(int));
 	int blocksPerWriter = blocks/WRITERS;
-	for(int i = 0; i < fillRepetitions; i++)
+	for(int j = 0; j < blocksPerWriter; j++)
 	{
-		for(int j = 0; j < blocksPerWriter; j++)
-		{
-			EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerWriter + j + fillRepetitions * blocks);
-		}
+		EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerWriter + j);
 	}
 
 }
@@ -66,12 +60,9 @@ void *DequeueData(void* varg)
 	struct QueueParameter* queueParameter = (struct QueueParameter*) varg;
 	int blocks = BUFFERSIZE / (BLOCKSIZE + sizeof(int));
 	int blocksPerReader = blocks/READERS;
-	for(int i = 0; i < fillRepetitions; i++)
+	for(int j = 0; j < blocksPerReader; j++)
 	{
-		for(int j = 0; j < blocksPerReader; j++)
-		{
-			DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerReader + j + i * blocks);
-		}
+		DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerReader + j);
 	}
 }
 
@@ -93,7 +84,12 @@ int ThreadBenchmark()
 	for(int i = 0; i < WRITERS; i++)
 	{
 		queueParameters[READERS + i] = (struct QueueParameter*) malloc(sizeof(struct QueueParameter));
+		
 		queueParameters[READERS + i]->data = (byte*)malloc(BLOCKSIZE);
+		for(int j = 0; j < BLOCKSIZE; j++)
+		{
+			queueParameters[READERS + i]->data[j] = 'x';
+		}
 		queueParameters[READERS + i]->bufferQueue = bufferQueue;
 		queueParameters[READERS + i]->idx = i;
 	}

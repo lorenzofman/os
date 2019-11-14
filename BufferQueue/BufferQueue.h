@@ -12,8 +12,6 @@ struct BufferQueue
 	int readBytes;
 	int writtenBytes;
 	int capacity;
-	pthread_mutex_t dequeueLock;
-	pthread_mutex_t enqueueLock;
 	pthread_mutex_t usedBytesLock;
 	pthread_mutex_t readBytesLock;
 	pthread_mutex_t writtenBytesLock;

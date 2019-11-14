@@ -8,8 +8,12 @@
 #include <stdarg.h>
 
 #define DEBUG
-#define S_WAIT_TIME 1
-#define WAIT_TIME 0
+#define S_WAIT_TIME 0
+#define WAIT_TIME 1
+
+static struct timespec ts = {S_WAIT_TIME, WAIT_TIME};
+
+int headerSize = sizeof(int);
 
 /* Tickets */
 int writeTicket = 0;
@@ -51,9 +55,8 @@ struct BufferQueue* CreateBufferThreaded(int size)
 	memset(bufferQueue->dequeue, 0, size);
 	bufferQueue->capacity = bufferQueue->readBytes = size;
 	bufferQueue->usedBytes = bufferQueue->writtenBytes = 0;
+
 	pthread_mutex_init(&printf_mutex, NULL);
-	pthread_mutex_init(&bufferQueue->dequeueLock, NULL);
-	pthread_mutex_init(&bufferQueue->enqueueLock, NULL);
 	pthread_mutex_init(&bufferQueue->usedBytesLock, NULL);
 	pthread_mutex_init(&bufferQueue->readBytesLock, NULL);
 	pthread_mutex_init(&bufferQueue->writtenBytesLock, NULL);
@@ -67,6 +70,7 @@ struct BufferQueue* CreateBufferThreaded(int size)
 	
 	return bufferQueue;
 }
+
 
 int SyncPrintf(const char *format, ... )
 {
@@ -84,7 +88,6 @@ int SyncPrintf(const char *format, ... )
 	#endif
 	return 0;
 }
-
 
 void IncrementTicket(int *ticket,  pthread_mutex_t* ticketLock)
 {
@@ -112,28 +115,55 @@ void WaitTicketTurn(int ticket, int* globalTicket)
 		}
 		else
 		{
-			struct timespec ts = {S_WAIT_TIME, WAIT_TIME};
 			nanosleep(&ts, NULL);
 		}
 	}
 }
 
+int AcquireTicket(int *ticket, pthread_mutex_t * ticketMutex, int * globalTicket)
+{
+	int myTicket = GetMyTicket(ticket, ticketMutex);
+	WaitTicketTurn(myTicket, globalTicket);
+	return myTicket;
+}
 
-bool FullBuffer(struct BufferQueue* bufferQueue, int amount, int idx)
+void UpdateUsedSize(struct BufferQueue* bufferQueue, int amount)
 {
 	pthread_mutex_lock(&bufferQueue->usedBytesLock);
+	bufferQueue->usedBytes += amount;
+	pthread_mutex_unlock(&bufferQueue->usedBytesLock);
+}
+
+void UpdateReadAndWrittenBytesValues(struct BufferQueue* bufferQueue, int totalSize)
+{
+	pthread_mutex_lock(&bufferQueue->writtenBytesLock);
+	pthread_mutex_lock(&bufferQueue->readBytesLock);
+	
+	bufferQueue->readBytes -= totalSize;
+	bufferQueue->writtenBytes += totalSize;
+	
+	pthread_mutex_unlock(&bufferQueue->readBytesLock);	
+	pthread_mutex_unlock(&bufferQueue->writtenBytesLock);
+}
+
+bool FullBuffer(struct BufferQueue* bufferQueue, int amount)
+{
 	int freeBufferSpace = bufferQueue->capacity - bufferQueue->usedBytes;
-	int headerSize = sizeof(int);
-	int totalRequiredSize = amount;
+	int totalRequiredSize = amount + headerSize;
 	if (totalRequiredSize > freeBufferSpace || bufferQueue->readBytes < totalRequiredSize)
 	{
-        pthread_mutex_unlock(&bufferQueue->usedBytesLock);
-		return false;
+        return false;
 	}
-	bufferQueue->usedBytes += amount;
-	SyncPrintf("W%i) Used bytes: %i\n", idx, bufferQueue->usedBytes);
-	pthread_mutex_unlock(&bufferQueue->usedBytesLock);
+	UpdateUsedSize(bufferQueue, totalRequiredSize);
 	return true;
+}
+	
+void WaitsBufferSpace(struct BufferQueue* bufferQueue, int totalSize)
+{
+	while(FullBuffer(bufferQueue, totalSize) == false)
+	{
+		nanosleep(&ts, NULL);
+	}
 }
 
 
@@ -155,54 +185,46 @@ void WriteDataAsync(struct BufferQueue* bufferQueue, byte* enqueuePosition, byte
 	}
 }
 
+
 int EnqueueThread(struct BufferQueue* bufferQueue, byte* data, int dataLength, int idx)
 {
-	int myWriteTicket = GetMyTicket(&writeTicket, &writeTicketMutex);
-	SyncPrintf("W%i) Fetching ticket: %i\n", idx, myWriteTicket);
-	WaitTicketTurn(myWriteTicket, &writeBeginGlobalTicket);
-	SyncPrintf("W%i) My turn: %i\n", idx, myWriteTicket);
+	/* Acquire ticket and wait for it's turn */
+	int myTicket = AcquireTicket(&writeTicket, &writeTicketMutex, &writeBeginGlobalTicket);
 
-	int headerSize = sizeof(int);
+	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
-	SyncPrintf("W%i) Inserting %i bytes + %i header bytes\n", idx, dataLength, headerSize);	
-	while(FullBuffer(bufferQueue, totalSize, idx) == false)
-	{
-		SyncPrintf("W%i) Full buffer, waiting %i s and %i ns\n", idx, S_WAIT_TIME, WAIT_TIME);
-		struct timespec ts = {S_WAIT_TIME, WAIT_TIME};
-		nanosleep(&ts, NULL);
-	}
-	SyncPrintf("W%i) Buffer has capacity\n", idx, dataLength, headerSize);
-	pthread_mutex_lock(&bufferQueue->enqueueLock);
+
+	/* Waits until buffer has totalSize free space */
+	WaitsBufferSpace(bufferQueue, totalSize);
+
+	/* Store current enqueue position and update the next one before releasing ticket for next writers */
 	byte* bufferEnqueue = bufferQueue->enqueue;
 	IncrementEnqueue(bufferQueue, totalSize);
-	SyncPrintf("W%i) Incrementing enqueue position for next writers\n", idx);
-	pthread_mutex_unlock(&bufferQueue->enqueueLock);
 
-	SyncPrintf("W%i) Incrementing write begin ticket\n", idx);
-	IncrementTicket(&writeBeginGlobalTicket, &writeBeginGlobalTicketMutex); // Allowing the next writer to enter
+	/* Releases current ticket allowing subsequent writers to start working */
+	IncrementTicket(&writeBeginGlobalTicket, &writeBeginGlobalTicketMutex);
 
+	/* Writes header*/
 	WriteDataAsync(bufferQueue, bufferEnqueue, (byte*) &dataLength, headerSize);
-	SyncPrintf("W%i) Writing header async\n", idx);
+	
+	/* Calculate data position */
 	bufferEnqueue = IncrementedPointer(bufferQueue, bufferEnqueue, headerSize);
+
+	/* Writes data*/
 	WriteDataAsync(bufferQueue, bufferEnqueue, data, dataLength);
-	SyncPrintf("W%i) Writing data async\n", idx);
 
+	/* 
+		Wait to update writtenBytes in order. One writer starts, release ticket and loose CPU, 
+		another writer is started and finish writing his data, if the second writer updates the 
+		writtenBytes value, a reader might think the first writer has finished writing and their
+		data is ready. Updating writtenBytes in order prevent that 
+	*/ 
+	WaitTicketTurn(myTicket, &writeFinishGlobalTicket);
 
-	SyncPrintf("W%i) Waiting to update write in order\n", idx);
-	SyncPrintf("W%i) My index: %i, global index: %i\n", idx, myWriteTicket, writeBeginGlobalTicket);
-	WaitTicketTurn(myWriteTicket, &writeFinishGlobalTicket);
-	SyncPrintf("W%i) Turn is mine\n", idx);	
-	pthread_mutex_lock(&bufferQueue->writtenBytesLock);
-	pthread_mutex_lock(&bufferQueue->readBytesLock);
-	SyncPrintf("W%i) Updating values\n", idx);	
-	bufferQueue->writtenBytes += totalSize;
-	bufferQueue->readBytes -= totalSize;
-	SyncPrintf("W%i) Used bytes: %i, WrittenBytes: %i, ReadBytes: %i\n", idx, bufferQueue->usedBytes, bufferQueue->writtenBytes, bufferQueue->readBytes);
-	SyncPrintf("W%i) Incrementing write finish ticket\n", idx);
+	UpdateReadAndWrittenBytesValues(bufferQueue, totalSize);
+
+	/* Release ticket, allowing other writer inform it finished writing as well */
 	IncrementTicket(&writeFinishGlobalTicket, &writeFinishGlobalTicketMutex);
-	pthread_mutex_unlock(&bufferQueue->readBytesLock);
-	pthread_mutex_unlock(&bufferQueue->writtenBytesLock);
-	SyncPrintf("W%i) Insertion terminated succesfully\n", idx);
 	return 1;
 }
 
@@ -225,94 +247,70 @@ void ReadDataAsync(struct BufferQueue* bufferQueue, byte* dequeuePosition, byte*
 }
 
 
-int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize, int idx)
+void WaitBufferNotEmpty(struct BufferQueue* bufferQueue)
 {
-	int myTicket = GetMyTicket(&readTicket, &readTicketMutex);
-	SyncPrintf("R%i) Fetching ticket: %i Global ticket: %i\n", idx, myTicket, readBeginGlobalTicket);
-	WaitTicketTurn(myTicket, &readBeginGlobalTicket);
-	SyncPrintf("R%i) My turn: %i\n", idx, myTicket);
-
 	while(true)
 	{
-		pthread_mutex_lock(&bufferQueue->usedBytesLock);
 		if(bufferQueue->usedBytes > 0)
 		{
-			SyncPrintf("R%i) Buffer isn't empty, continuing\n", idx);
-			pthread_mutex_unlock(&bufferQueue->usedBytesLock);
-			break;
+			return;
 		}
-		
-		SyncPrintf("R%i) Empty buffer, waiting %i s and %i ns\n", idx, S_WAIT_TIME, WAIT_TIME);
-		pthread_mutex_unlock(&bufferQueue->usedBytesLock);
-		struct timespec ts = {S_WAIT_TIME, WAIT_TIME};
 		nanosleep(&ts, NULL);
 	}
+}
 
+void WaitDataIsWritten(struct BufferQueue* bufferQueue)
+{
+	while(bufferQueue->writtenBytes == 0)
+	{
+		nanosleep(&ts, NULL);
+	}
+}
+
+int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize, int idx)
+{
+	/* Acquire ticket and wait for it's turn */
+	int myTicket = AcquireTicket(&readTicket, &readTicketMutex, &readBeginGlobalTicket);
+
+	/* Waits until buffer has at least one byte used */
+	WaitBufferNotEmpty(bufferQueue);
+
+	/* Waits, based on written bytes, before reading the data which might be corrupted */
+	WaitDataIsWritten(bufferQueue);
+
+	/* Reads the header */
 	int bytesCount;
-	byte* dequeuePosition;
-	
-	while(bufferQueue->writtenBytes < sizeof(int))
-	{
-		struct timespec ts = {S_WAIT_TIME, WAIT_TIME};
-		nanosleep(&ts, NULL);
-	}
-	pthread_mutex_lock(&bufferQueue->dequeueLock);
-	SyncPrintf("R%i) Locking dequeue\n", idx);
-	dequeuePosition = bufferQueue->dequeue;
-	SyncPrintf("R%i) Reading length of block\n", idx);
-	ReadDataAsync(bufferQueue, dequeuePosition, (byte*) &bytesCount, sizeof(int));
-	SyncPrintf("R%i) Block length: %i\n", idx, bytesCount);
-
-	while(true)
-	{
-		if(bytesCount < bufferQueue->writtenBytes)
-		{
-			SyncPrintf("R%i) Data is written\n", idx);
-			pthread_mutex_unlock(&bufferQueue->writtenBytesLock);
-			break;
-		}
-		SyncPrintf("R%i) Data not written yet, waiting %i ns\n", idx, WAIT_TIME);
-		SyncPrintf("R%i) WrittenBytes: %i, BytesCount: %i, UsedBytes: %i\n", idx, bufferQueue->writtenBytes, bytesCount, bufferQueue->usedBytes);
-		pthread_mutex_unlock(&bufferQueue->writtenBytesLock);
-		struct timespec ts = {S_WAIT_TIME, WAIT_TIME};
-		nanosleep(&ts, NULL);
-	}
-	
-	SyncPrintf("R%i) Increment Dequeue\n", idx);
-	IncrementDequeue(bufferQueue, bytesCount);
-	SyncPrintf("R%i) Update used bytes\n", idx);	
-	bufferQueue->usedBytes -= bytesCount + sizeof(int);
+	byte* dequeuePosition = bufferQueue->dequeue;
+	ReadDataAsync(bufferQueue, dequeuePosition, (byte*) &bytesCount, headerSize);	
+	int totalSize = bytesCount + headerSize;
 	if (bytesCount > bufferSize)
 	{
 		SyncPrintf("R%i) Exception: Invalid buffer\n", idx);
+		IncrementTicket(&readBeginGlobalTicket, &readBeginGlobalTicketMutex);
 		return 0;
 	}
-	SyncPrintf("R%i) Unlocking dequeue and usedBytes locks\n", idx);
-	SyncPrintf("R%i) Incrementing read begin ticket, global ticket new value = %i\n", idx, readBeginGlobalTicket + 1);
+
+	/* Increment dequeue pointer for the next reader work with */
+	IncrementDequeue(bufferQueue, totalSize);	
+	
+	/* Update usedBytes value */
+	UpdateUsedSize(bufferQueue, -totalSize);
+	
+	/* Update ticket allowing next reader start working */
 	IncrementTicket(&readBeginGlobalTicket, &readBeginGlobalTicketMutex);
-	pthread_mutex_unlock(&bufferQueue->dequeueLock);
-	pthread_mutex_unlock(&bufferQueue->usedBytesLock);
 
-	SyncPrintf("R%i) Reading data async\n", idx);
-	byte* readPos = IncrementedPointer(bufferQueue, dequeuePosition, sizeof(int));
-	ReadDataAsync(bufferQueue, readPos, (byte*) &bytesCount, sizeof(int));
+	/* Calculates the data position */
+	dequeuePosition = IncrementedPointer(bufferQueue, dequeuePosition, headerSize);
+	
+	/* Read data from bufferQueue into buffer */
+	ReadDataAsync(bufferQueue, dequeuePosition, buffer, bytesCount);
 
-	SyncPrintf("R%i) Waiting ticket to update read/written bytes\n", idx);
+	/* Wait read bytes update turn */
 	WaitTicketTurn(myTicket, &readFinishGlobalTicket);
-	pthread_mutex_lock(&bufferQueue->writtenBytesLock);
-	pthread_mutex_lock(&bufferQueue->readBytesLock);
-	SyncPrintf("R%i) Updating read/written bytes\n", idx);
 
-	SyncPrintf("R%i) [BEFORE] Used bytes: %i, WrittenBytes: %i, ReadBytes: %i\n", idx, bufferQueue->usedBytes, bufferQueue->writtenBytes, bufferQueue->readBytes);			
+	UpdateReadAndWrittenBytesValues(bufferQueue, -totalSize);
 	
-	bufferQueue->writtenBytes -= bytesCount + sizeof(int);
-	bufferQueue->readBytes += bytesCount + sizeof(int);
-	SyncPrintf("R%i) BytesCount: %i\n", idx, bytesCount);			
-	SyncPrintf("R%i) [AFTER] Used bytes: %i, WrittenBytes: %i, ReadBytes: %i\n", idx, bufferQueue->usedBytes, bufferQueue->writtenBytes, bufferQueue->readBytes);			
-	
+	/* Increment ticket for next readers be able to also update read and written bytes values*/
 	IncrementTicket(&readFinishGlobalTicket, &readFinishGlobalTicketMutex);
-	pthread_mutex_unlock(&bufferQueue->readBytesLock);
-	pthread_mutex_unlock(&bufferQueue->writtenBytesLock);
-	SyncPrintf("R%i) Read succesfull\n", idx);
     return bytesCount;
 }
