@@ -7,7 +7,7 @@
 #include <string.h>
 #define READERS 4
 #define WRITERS 4
-#define BUFFERSIZE 1024 * 4
+#define BUFFERSIZE 1024 * 1024 * 32
 #define BLOCKSIZE (1024 - 4)
 
 struct QueueParameter
@@ -51,7 +51,7 @@ void *EnqueueData(void* varg)
 	int blocksPerWriter = blocks/WRITERS;
 	for(int j = 0; j < blocksPerWriter; j++)
 	{
-		EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerWriter + j);
+		EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
 	}
 
 }
@@ -62,7 +62,7 @@ void *DequeueData(void* varg)
 	int blocksPerReader = blocks/READERS;
 	for(int j = 0; j < blocksPerReader; j++)
 	{
-		DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerReader + j);
+		DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
 	}
 }
 

@@ -149,18 +149,17 @@ void UpdateReadAndWrittenBytesValues(struct BufferQueue* bufferQueue, int totalS
 bool FullBuffer(struct BufferQueue* bufferQueue, int amount)
 {
 	int freeBufferSpace = bufferQueue->capacity - bufferQueue->usedBytes;
-	int totalRequiredSize = amount + headerSize;
-	if (totalRequiredSize > freeBufferSpace || bufferQueue->readBytes < totalRequiredSize)
+	if (amount > freeBufferSpace || bufferQueue->readBytes < amount)
 	{
-        return false;
+        return true;
 	}
-	UpdateUsedSize(bufferQueue, totalRequiredSize);
-	return true;
+	UpdateUsedSize(bufferQueue, amount);
+	return false;
 }
 	
 void WaitsBufferSpace(struct BufferQueue* bufferQueue, int totalSize)
 {
-	while(FullBuffer(bufferQueue, totalSize) == false)
+	while(FullBuffer(bufferQueue, totalSize))
 	{
 		nanosleep(&ts, NULL);
 	}
@@ -186,11 +185,10 @@ void WriteDataAsync(struct BufferQueue* bufferQueue, byte* enqueuePosition, byte
 }
 
 
-int EnqueueThread(struct BufferQueue* bufferQueue, byte* data, int dataLength, int idx)
+int EnqueueThread(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
 	/* Acquire ticket and wait for it's turn */
 	int myTicket = AcquireTicket(&writeTicket, &writeTicketMutex, &writeBeginGlobalTicket);
-
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
 
@@ -204,13 +202,13 @@ int EnqueueThread(struct BufferQueue* bufferQueue, byte* data, int dataLength, i
 	/* Releases current ticket allowing subsequent writers to start working */
 	IncrementTicket(&writeBeginGlobalTicket, &writeBeginGlobalTicketMutex);
 
-	/* Writes header*/
+	/* Writes header */
 	WriteDataAsync(bufferQueue, bufferEnqueue, (byte*) &dataLength, headerSize);
 	
 	/* Calculate data position */
 	bufferEnqueue = IncrementedPointer(bufferQueue, bufferEnqueue, headerSize);
 
-	/* Writes data*/
+	/* Writes data */
 	WriteDataAsync(bufferQueue, bufferEnqueue, data, dataLength);
 
 	/* 
@@ -236,7 +234,6 @@ void ReadDataAsync(struct BufferQueue* bufferQueue, byte* dequeuePosition, byte*
 	if (remainingBytes > 0)
 	{
 		memcpy(buffer, dequeuePosition, length - remainingBytes);
-
 		int dataStart = length - remainingBytes;
 		memcpy(buffer + dataStart, bufferQueue->buffer, remainingBytes);
 	}
@@ -249,12 +246,8 @@ void ReadDataAsync(struct BufferQueue* bufferQueue, byte* dequeuePosition, byte*
 
 void WaitBufferNotEmpty(struct BufferQueue* bufferQueue)
 {
-	while(true)
+	while(bufferQueue->usedBytes == 0)
 	{
-		if(bufferQueue->usedBytes > 0)
-		{
-			return;
-		}
 		nanosleep(&ts, NULL);
 	}
 }
@@ -267,7 +260,7 @@ void WaitDataIsWritten(struct BufferQueue* bufferQueue)
 	}
 }
 
-int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize, int idx)
+int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
 	/* Acquire ticket and wait for it's turn */
 	int myTicket = AcquireTicket(&readTicket, &readTicketMutex, &readBeginGlobalTicket);
@@ -285,16 +278,16 @@ int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize,
 	int totalSize = bytesCount + headerSize;
 	if (bytesCount > bufferSize)
 	{
-		SyncPrintf("R%i) Exception: Invalid buffer\n", idx);
-		IncrementTicket(&readBeginGlobalTicket, &readBeginGlobalTicketMutex);
-		return 0;
+		SyncPrintf("BytesCount: %i, BufferSize: %i\n", bytesCount, bufferSize);
+		SyncPrintf("Error\n");
+		exit(1);
 	}
 
-	/* Increment dequeue pointer for the next reader work with */
-	IncrementDequeue(bufferQueue, totalSize);	
-	
 	/* Update usedBytes value */
 	UpdateUsedSize(bufferQueue, -totalSize);
+	
+	/* Increment dequeue pointer for the next reader work with */
+	IncrementDequeue(bufferQueue, totalSize);	
 	
 	/* Update ticket allowing next reader start working */
 	IncrementTicket(&readBeginGlobalTicket, &readBeginGlobalTicketMutex);
@@ -312,5 +305,6 @@ int DequeueThread(struct BufferQueue* bufferQueue, void* buffer, int bufferSize,
 	
 	/* Increment ticket for next readers be able to also update read and written bytes values*/
 	IncrementTicket(&readFinishGlobalTicket, &readFinishGlobalTicketMutex);
+
     return bytesCount;
 }
