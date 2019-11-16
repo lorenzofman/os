@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define READERS 4
-#define WRITERS 4
+#define READERS 1
+#define WRITERS 1
 #define BUFFERSIZE 1024 * 1024 * 32
 #define BLOCKSIZE (1024 - 4)
 
@@ -17,9 +17,8 @@ struct QueueParameter
 	byte * data;
 };
 
-char* SizeString(long long i)
+char* SizeString(long long i, char* buffer)
 {
-	char* buffer = (char*)malloc(sizeof(char) * 5);
 	if (buffer == NULL)
 	{
 		return "ERROR";
@@ -51,7 +50,11 @@ void *EnqueueData(void* varg)
 	int blocksPerWriter = blocks/WRITERS;
 	for(int j = 0; j < blocksPerWriter; j++)
 	{
-		EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
+		int result;
+		do
+		{
+			result = EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
+		} while (result == 0);
 	}
 
 }
@@ -62,7 +65,11 @@ void *DequeueData(void* varg)
 	int blocksPerReader = blocks/READERS;
 	for(int j = 0; j < blocksPerReader; j++)
 	{
-		DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
+		int result;
+		do
+		{
+			result = DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
+		} while(result == 0);
 	}
 }
 
@@ -86,14 +93,9 @@ int ThreadBenchmark()
 		queueParameters[READERS + i] = (struct QueueParameter*) malloc(sizeof(struct QueueParameter));
 		
 		queueParameters[READERS + i]->data = (byte*)malloc(BLOCKSIZE);
-		for(int j = 0; j < BLOCKSIZE; j++)
-		{
-			queueParameters[READERS + i]->data[j] = 'x';
-		}
 		queueParameters[READERS + i]->bufferQueue = bufferQueue;
 		queueParameters[READERS + i]->idx = i;
 	}
-
 	clock_t start = clock();
 	
 	for(int i = 0; i < READERS; i++)
@@ -118,12 +120,15 @@ int ThreadBenchmark()
 
 
 	clock_t end = clock();
+	char* buffer = malloc(10 * sizeof(char));
 	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
 	double result = (double)BUFFERSIZE / elapsedTime;
 	long long throughput = (long long) (result);
 	printf("Time: %lf ms\n", elapsedTime * 1000);
-	printf("Payload: %s\n", SizeString(BUFFERSIZE));
-	printf("Velocity = %s/s\n", SizeString(throughput));
+	printf("Payload: %s\n", SizeString(BUFFERSIZE, buffer));
+	printf("Velocity = %s/s\n", SizeString(throughput, buffer));
+	DestroyBuffer(bufferQueue);
+	free(buffer);
 	return 0;
 }
 
@@ -152,13 +157,16 @@ int Benchmark()
 	clock_t end = clock();
 
 	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
+	char* buffer = malloc(10 * sizeof(char));
+
 	double result = (double)BUFFERSIZE / elapsedTime;
 	long long throughput = (long long) (result);
 	printf("Time: %lf ms\n", elapsedTime * 1000);
-	printf("Payload: %s\n", SizeString(BUFFERSIZE));
-	printf("Velocity: %s/s\n", SizeString(throughput));
+	printf("Payload: %s\n", SizeString(BUFFERSIZE, buffer));
+	printf("Velocity: %s/s\n", SizeString(throughput, buffer));
 	DestroyBuffer(queue);
 	free(data);
+	free(buffer);
 	return 0;
 }
 

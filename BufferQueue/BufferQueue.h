@@ -9,12 +9,11 @@ struct BufferQueue
 	byte* dequeue; /* Dequeue start position */
 	byte* enqueue; /* Enqueue start position */
 	int usedBytes;
-	int readBytes;
-	int writtenBytes;
 	int capacity;
-	pthread_mutex_t usedBytesLock;
-	pthread_mutex_t readBytesLock;
-	pthread_mutex_t writtenBytesLock;
+	int ticket;
+	int globalTicket;
+	pthread_mutex_t ticketLock;
+	pthread_mutex_t globalTicketLock;
 };
 
 byte* IncrementedPointer(struct BufferQueue* queue, byte* pointer, int amount);
