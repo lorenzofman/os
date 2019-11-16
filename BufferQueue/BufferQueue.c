@@ -1,3 +1,4 @@
+#define HAVE_STRUCT_TIMESPEC
 #include <pthread.h>
 #include "BufferQueue.h"
 #include <stdio.h>
@@ -64,7 +65,7 @@ void WriteData(struct BufferQueue* bufferQueue, byte* data, int length)
 	int remainingBytes = resultingEnd - bufferCapacity;
 	if (remainingBytes > 0)
 	{
-		memcpy(bufferQueue->enqueue, data, length - remainingBytes);
+		memcpy(bufferQueue->enqueue, data, (long long) length - remainingBytes);
 		
 		int dataStart = length - remainingBytes;
 		memcpy(bufferQueue->buffer, data + dataStart, remainingBytes);
@@ -103,7 +104,7 @@ void ReadData(struct BufferQueue* bufferQueue, byte* buffer, int length)
 	int remainingBytes = resultingStart - bufferCapacity;
 	if (remainingBytes > 0)
 	{
-		memcpy(buffer, bufferQueue->dequeue, length - remainingBytes);
+		memcpy(buffer, bufferQueue->dequeue, (long long) length - remainingBytes);
 
 		int dataStart = length - remainingBytes;
 		memcpy(buffer + dataStart, bufferQueue->buffer, remainingBytes);

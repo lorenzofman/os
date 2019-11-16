@@ -1,4 +1,5 @@
 #include "BufferQueueThread.h"
+#define HAVE_STRUCT_TIMESPEC
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,7 +7,7 @@
 #include <memory.h>
 #include <stdbool.h>
 #include <stdarg.h>
-
+#include <Windows.h>
 #define DEBUG
 #define S_WAIT_TIME 0
 #define WAIT_TIME 1
@@ -115,7 +116,8 @@ void WaitTicketTurn(int ticket, int* globalTicket)
 		}
 		else
 		{
-			nanosleep(&ts, NULL);
+			//nanosleep(&ts, NULL);
+			Sleep(1);
 		}
 	}
 }
@@ -162,7 +164,8 @@ void WaitsBufferSpace(struct BufferQueue* bufferQueue, int totalSize)
 {
 	while(FullBuffer(bufferQueue, totalSize) == false)
 	{
-		nanosleep(&ts, NULL);
+		//nanosleep(&ts, NULL);
+		Sleep(1);
 	}
 }
 
@@ -255,7 +258,8 @@ void WaitBufferNotEmpty(struct BufferQueue* bufferQueue)
 		{
 			return;
 		}
-		nanosleep(&ts, NULL);
+		//nanosleep(&ts, NULL);
+		Sleep(1);
 	}
 }
 
@@ -263,7 +267,8 @@ void WaitDataIsWritten(struct BufferQueue* bufferQueue)
 {
 	while(bufferQueue->writtenBytes == 0)
 	{
-		nanosleep(&ts, NULL);
+		Sleep(1);
+		//nanosleep(&ts, NULL);
 	}
 }
 

@@ -8,7 +8,7 @@
 #define READERS 4
 #define WRITERS 4
 #define BUFFERSIZE 1024 * 4
-#define BLOCKSIZE (1024 - 4)
+#define BLOCKSIZE (128 - 4)
 
 struct QueueParameter
 {
@@ -53,7 +53,7 @@ void *EnqueueData(void* varg)
 	{
 		EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerWriter + j);
 	}
-
+	return NULL;
 }
 void *DequeueData(void* varg)
 {
@@ -64,18 +64,36 @@ void *DequeueData(void* varg)
 	{
 		DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE, queueParameter->idx*blocksPerReader + j);
 	}
+	return NULL;
 }
 
 int ThreadBenchmark()
 {
 	struct BufferQueue* bufferQueue = CreateBufferThreaded(BUFFERSIZE);
 	pthread_t* readers = (pthread_t*)malloc(sizeof(pthread_t) * READERS);
+	if (readers == NULL)
+	{
+		return 0;
+	}
 	pthread_t* writers = (pthread_t*)malloc(sizeof(pthread_t) * WRITERS);
 	
+	if (writers == NULL)
+	{
+		return 0;
+	}
+
 	struct QueueParameter** queueParameters = (struct QueueParameter**)malloc(sizeof(struct QueueParameter) * (READERS + WRITERS));
+	if (queueParameters == NULL) 
+	{
+		return 0;
+	}
 	for(int i = 0; i < READERS; i++)
 	{
 		queueParameters[i] = (struct QueueParameter*) malloc(sizeof(struct QueueParameter));
+		if (queueParameters[i] == NULL)
+		{
+			return 0;
+		}
 		queueParameters[i]->data = (byte*)malloc(BLOCKSIZE);
 		queueParameters[i]->bufferQueue = bufferQueue;
 		queueParameters[i]->idx = i;
@@ -84,8 +102,15 @@ int ThreadBenchmark()
 	for(int i = 0; i < WRITERS; i++)
 	{
 		queueParameters[READERS + i] = (struct QueueParameter*) malloc(sizeof(struct QueueParameter));
-		
+		if (queueParameters[READERS + i] == NULL)
+		{
+			return 0;
+		}
 		queueParameters[READERS + i]->data = (byte*)malloc(BLOCKSIZE);
+		if (queueParameters[READERS + i]->data == NULL)
+		{
+			return 0;
+		}
 		for(int j = 0; j < BLOCKSIZE; j++)
 		{
 			queueParameters[READERS + i]->data[j] = 'x';
@@ -118,7 +143,7 @@ int ThreadBenchmark()
 
 
 	clock_t end = clock();
-	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
+	double elapsedTime = ((double) end - start) / CLOCKS_PER_SEC;
 	double result = (double)BUFFERSIZE / elapsedTime;
 	long long throughput = (long long) (result);
 	printf("Time: %lf ms\n", elapsedTime * 1000);
@@ -137,12 +162,12 @@ int Benchmark()
 		return 1;
 	}
 
+	clock_t start = clock();
 
 	for (int i = 0; i < blocks; i++)
 	{
 		Enqueue(queue, data, BLOCKSIZE);
 	}
-	clock_t start = clock();
 
 	for (int i = 0; i < blocks; i++)
 	{
@@ -151,7 +176,7 @@ int Benchmark()
 
 	clock_t end = clock();
 
-	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
+	double elapsedTime = ((double)end - start) / CLOCKS_PER_SEC;
 	double result = (double)BUFFERSIZE / elapsedTime;
 	long long throughput = (long long) (result);
 	printf("Time: %lf ms\n", elapsedTime * 1000);
@@ -164,6 +189,7 @@ int Benchmark()
 
 int main(int argc, char *argv[])
 {
+	return ThreadBenchmark();
 	if(argc > 0)
 	{
 		for(int i = 0; i < argc; i++)
