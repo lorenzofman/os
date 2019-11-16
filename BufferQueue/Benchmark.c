@@ -9,6 +9,7 @@
 #define WRITERS 1
 #define BUFFERSIZE 1024 * 1024 * 32
 #define BLOCKSIZE (1024 - 4)
+#define THREADS
 
 struct QueueParameter
 {
@@ -37,7 +38,7 @@ char* SizeString(long long i, char* buffer)
 	}
 	else
 	{
-		sprintf(buffer, "%lfGB", (double) i / ((double)1024 * 1024 * 1024));
+		sprintf(buffer, "%.5lfGB", (double) i / ((double)1024 * 1024 * 1024));
 	}
 	return buffer;
 }
@@ -201,18 +202,29 @@ int Benchmark()
 
 int main(int argc, char *argv[])
 {
-	return ThreadBenchmark();
-	if(argc > 0)
-	{
-		for(int i = 0; i < argc; i++)
+	#ifdef _WIN32
+		#ifdef THREADS
+			printf("Threaded Benchmark\n");
+			return ThreadBenchmark();
+		#else
+			printf("Non-Threaded Benchmark\n");
+			return Benchmark();
+		#endif
+	#else
+		printf("Threaded Benchmark\n");
+		return Benchmark();
+		if(argc > 0)
 		{
-			if(strcmp(argv[i], "-t") == 0)
+			for(int i = 0; i < argc; i++)
 			{
-				printf("Threaded Benchmark\n");
-				return ThreadBenchmark();
+				if(strcmp(argv[i], "-t") == 0)
+				{
+					printf("Threaded Benchmark\n");
+					return ThreadBenchmark();
+				}
 			}
 		}
-	}
-	printf("Non-threaded Benchmark\n");
-	return Benchmark();
+		printf("Non-threaded Benchmark\n");
+		return Benchmark();
+	#endif
 }
