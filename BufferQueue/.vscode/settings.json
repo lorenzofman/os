@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "pthread.h": "c",
-        "bufferqueue.h": "c",
-        "bufferqueuethread.h": "c",
-        "string.h": "c"
-    }
-}
