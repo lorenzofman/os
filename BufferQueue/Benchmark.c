@@ -7,7 +7,7 @@
 #include <string.h>
 #define READERS 1
 #define WRITERS 1
-#define BUFFERSIZE 1024 * 1024 * 32
+#define BUFFERSIZE 1024 * 4 * 4 * 4
 #define BLOCKSIZE (1024 - 4)
 #define THREADS
 
@@ -51,11 +51,7 @@ void *EnqueueData(void* varg)
 	int blocksPerWriter = blocks/WRITERS;
 	for(int j = 0; j < blocksPerWriter; j++)
 	{
-		int result;
-		do
-		{
-			result = EnqueueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
-		} while (result == 0);
+		EnqueueThread_B(queueParameter->bufferQueue, queueParameter->data, rand()%BLOCKSIZE);
 	}
 	return NULL;
 }
@@ -66,11 +62,7 @@ void *DequeueData(void* varg)
 	int blocksPerReader = blocks/READERS;
 	for(int j = 0; j < blocksPerReader; j++)
 	{
-		int result;
-		do
-		{
-			result = DequeueThread(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
-		} while(result == 0);
+		DequeueThread_B(queueParameter->bufferQueue, queueParameter->data, rand()%BLOCKSIZE);
 	}
 	return NULL;
 }
