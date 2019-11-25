@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <unistd.h>
+#ifndef __USE_POSIX199309
+#define __USE_POSIX199309
+#endif 
 #include <time.h>
 #include "Types.h"
 #include "Utils.h"

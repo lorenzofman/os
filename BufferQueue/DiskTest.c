@@ -20,6 +20,7 @@
 
 void UseDisk(struct DiskScheduler * scheduler, char* filename)
 {
+    printf("Wooo\n");
     FILE * file = fopen(filename, "r");
     int checksum = 0;
     while (!feof(file) && !ferror(file)) 
