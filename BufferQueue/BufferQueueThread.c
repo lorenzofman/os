@@ -75,7 +75,7 @@ void WaitTicketTurn(int ticket, int* globalTicket)
 		}
 		else
 		{
-			_Sleep(WAIT_TIME);
+			Sleep(WAIT_TIME);
 		}
 	}
 }
@@ -293,4 +293,20 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
     return bytesCount;
 }
 
+
 #pragma endregion
+
+bool Empty(struct BufferQueue* bufferQueue)
+{
+    return bufferQueue->usedBytes == 0;
+}
+
+bool Full(struct BufferQueue* bufferQueue)
+{
+    return bufferQueue->usedBytes == bufferQueue->capacity;
+}
+
+bool Fits(struct BufferQueue* bufferQueue, int size)
+{
+    return bufferQueue->usedBytes + size <= bufferQueue->capacity;
+}

@@ -1,15 +1,13 @@
 #include "BufferQueue.h"
 #include "BufferQueueThread.h"
 #include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include "DiskScheduler.h"
 #include "Disk.h"
 #include "Types.h"
 #include "Message.h"
-struct DiskScheduler
-{
-    struct Disk * disk;
-    struct BufferQueue * receiver;
-    struct BufferQueue * sender;
-};
+
 
 struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver, struct BufferQueue* sender)
 {
@@ -19,13 +17,6 @@ struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue*
     diskScheduler->sender = sender;
     return diskScheduler;
 }
-
-void StartDiskScheduler(struct DiskScheduler* diskScheduler)
-{
-    pthread_t diskThread;
-    pthread_create(&diskThread, NULL, Schedule, (void*)diskScheduler);
-}
-
 
 void ProcessReadRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
@@ -53,15 +44,22 @@ void ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
     }
 }
 
-void Schedule(void* arg)
+void* Schedule(void* varg)
 {
-    struct DiskScheduler* diskScheduler = (struct DiskScheduler*) arg;
+    struct DiskScheduler* diskScheduler = (struct DiskScheduler*) varg;
     uint messageSize = diskScheduler->disk->blockSize;
     byte* block = (byte*)malloc(messageSize);
     while(true)
     {
-        struct Message* message = DequeueThread_B(diskScheduler->receiver, block, messageSize);
+        DequeueThread_B(diskScheduler->receiver, block, messageSize);
+        struct Message* message = (struct Message*)block;
         ProcessMessage(diskScheduler, message);
     }
+}
+
+void StartDiskScheduler(struct DiskScheduler* diskScheduler)
+{
+    pthread_t diskThread;
+    pthread_create(&diskThread, NULL, Schedule, (void*)diskScheduler);
 }
 

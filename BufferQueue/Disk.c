@@ -1,12 +1,13 @@
-#include <stdio.h>
-#include <memory.h>
-#define __USE_POSIX199309
-#include <time.h>
-
 #include "Disk.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <unistd.h>
+#include <time.h>
 #include "Types.h"
 #include "Utils.h"
 #include "Constants.h"
+#include "Sleep.h"
 
 struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint superficies, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime)
 {
@@ -80,14 +81,14 @@ void DestroyDisk(struct Disk* disk)
     free(disk);
 }
 
-static double Now()
+double Now()
 {
-    struct timespec* ts;
+    struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-    return ts->tv_sec + ts->tv_nsec/1e9;
+    return ts.tv_sec + ts.tv_nsec/1e9;
 }
 
-static double WaitTill(struct Disk* disk, int block)
+double WaitTill(struct Disk* disk, int block)
 {
     double start = Now();
     double totalSearchTime = 0;
@@ -120,29 +121,29 @@ static double WaitTill(struct Disk* disk, int block)
     return afterWaitRot + disk->transferTime;
 }
 
-static void UpdateDiskCylinder(struct Disk * disk, int block)
+void UpdateDiskCylinder(struct Disk * disk, int block)
 {
     int cylinder = block / (disk->superficies * disk->sectorsPerTrack);
     disk->currentCylinder = cylinder;
 }
 
-static void *BlockEnd(struct Disk* disk, int block)
+void *BlockEnd(struct Disk* disk, int block)
 {
     return (void*) ((char*) disk + block * disk->blockSize);
 }
 
-static void Read(struct Disk* disk, int block, void* buf)
+void Read(struct Disk* disk, int block, void* buf)
 {
     double end = WaitTill(disk, block);
-    usleep(end - now() * 1e6);
+    Sleep(end - Now() * 1e9);
     UpdateDiskCylinder(disk, block);
     memcpy(buf, BlockEnd(disk, block), disk->blockSize);
 }
 
-static void Write(struct Disk* disk, int block, void *buf)
+void Write(struct Disk* disk, int block, void *buf)
 {
     double end = WaitTill(disk, block);
-    usleep(end - now() * 1e6);
+    Sleep(end - Now() * 1e9);
     UpdateDiskCylinder(disk, block);
     memcpy(BlockEnd(disk, block), buf, disk->blockSize);
 }
