@@ -6,9 +6,7 @@
 #include <memory.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#ifdef _WIN32
-#include <Windows.h>
-#endif // _WIN32
+#include "Sleep.h"
 
 
 #define WAIT_TIME 1
@@ -50,16 +48,6 @@ struct BufferQueue* CreateBufferThreaded(int size)
 	return bufferQueue;
 }
 
-void _Sleep(int nanoseconds)
-{
-#ifdef _WIN32
-	Sleep(nanoseconds/(1000 * 1000));
-#else
-	struct timespec ts = { 0, nanoseconds };
-	nanosleep(&ts, NULL);
-#endif
-
-}
 
 void IncrementTicket(int *ticket,  pthread_mutex_t* ticketLock)
 {

@@ -1,31 +1,31 @@
-
 #include <stdio.h>
 #include <memory.h>
 #define __USE_POSIX199309
 #include <time.h>
 
-#define DISK_ID 0xe1d15c0
+#include "Disk.h"
+#include "Types.h"
+#include "Utils.h"
+#include "Constants.h"
 
-#define ABS(X) X < 0 ? X : -X
-
-typedef unsigned int uint;
-
-struct Disk
+struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint superficies, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime)
 {
-    int diskIdentifier; // Number to validate disk
-    uint blocks;
-    uint blockSize;
-    uint cylinders;
-    uint superficies;
-    uint sectorsPerTrack;
-    uint rpm;
-    uint searchOverheadTime; /* (μs) */
-    uint transferTime; /* (μs) */
-    uint cylinderTime; /* (μs) */
-    uint currentCylinder;
-};
+    uint size = blocks * blockSize;
+    struct Disk *disk = (struct Disk *)malloc(size);
+    disk->blocks = blocks;
+    disk->blockSize = blockSize;
+    disk->cylinders = cylinders;
+    disk->superficies = superficies;
+    disk->sectorsPerTrack = sectorsPerTrack;
+    disk->rpm = rpm;
+    disk-> searchOverheadTime = searchOverheadTime;
+    disk->transferTime = transferTime;
+    disk->cylinderTime = cylinderTime;
+    disk->currentCylinder = 0;
+    return disk;
+}
 
-struct Disk* CreateDisk(char *fileName)
+struct Disk* CreateDiskFromFile(char *fileName)
 {
     FILE *file = fopen(fileName, "r");
     if (file == NULL)
@@ -60,7 +60,7 @@ struct Disk* CreateDisk(char *fileName)
     return disk;
 }
 
-void WriteDisk(struct Disk* disk, char* filename)
+void WriteDiskToFile(struct Disk* disk, char* filename)
 {
     if(disk->diskIdentifier == DISK_ID)
     {
@@ -145,5 +145,4 @@ static void Write(struct Disk* disk, int block, void *buf)
     usleep(end - now() * 1e6);
     UpdateDiskCylinder(disk, block);
     memcpy(BlockEnd(disk, block), buf, disk->blockSize);
-
 }

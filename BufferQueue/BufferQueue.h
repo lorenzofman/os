@@ -2,7 +2,7 @@
 #define BUFFERQUEUE
 #define HAVE_STRUCT_TIMESPEC
 #include <pthread.h>
-typedef unsigned char byte;
+#include "Types.h"
 struct BufferQueue
 {
 	byte* buffer; /* Buffer start position (static)*/
