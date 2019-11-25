@@ -18,18 +18,23 @@
     
 #define MESSAGES_WINDOW_SIZE 2048 /* One message uses only 16 bytes */
 
-void UseDisk(struct DiskScheduler * scheduler, char* filename)
+void UseDisk(struct DiskScheduler * scheduler, const char* filename)
 {
-    printf("Wooo\n");
     FILE * file = fopen(filename, "r");
     int checksum = 0;
+
+    if(file == NULL)
+    { 
+        printf("File doesn't exist\n");
+        return;
+    }
     while (!feof(file) && !ferror(file)) 
     {
-        checksum ^= fgetc(file);
+        char c = fgetc(file);
+        checksum ^= c;
     }
     int size = ftell(file);
 
-    printf("File size: %i", size);
     
     rewind(file);
 
@@ -38,7 +43,7 @@ void UseDisk(struct DiskScheduler * scheduler, char* filename)
     for(int i = 0; i < blocks; i++)
     {
         byte* buf = (byte*) malloc(blockSize);
-        int result = fread(buf, 1, blockSize, file);
+        int result = fread(buf, blockSize, 1, file);
         struct Message *message = malloc(sizeof(struct Message));
         message->buffer = buf;
         message->diskBlock = i + 1; /* Don't write in the first block */
@@ -46,12 +51,11 @@ void UseDisk(struct DiskScheduler * scheduler, char* filename)
         message->messageType = WriteMessageType;
         EnqueueThread_B(scheduler->receiver, buf, sizeof(struct Message));
     }
-
     int secondCheckum = 0;
     for(int i = 0; i < blocks; i++)
     {
         byte* buf = (byte*) malloc(blockSize);
-        DequeueThread_B(scheduler->sender, buf, sizeof(struct Message));
+        DequeueThread_B(scheduler->sender, buf, sizeof(struct Message)); 
         for (int j = 0; j < blockSize; j++)
         {
             secondCheckum ^= *(buf + j);

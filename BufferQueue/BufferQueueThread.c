@@ -33,8 +33,8 @@ struct BufferQueue* CreateBufferThreaded(int size)
 	
 	/* Tickets */
 	bufferQueue->ticket = bufferQueue->globalTicket = 0;
-	bufferQueue->readTicket = bufferQueue->globalReadTicket = 0;
-	bufferQueue->writeTicket = bufferQueue->globalWriteTicket = 0;
+	bufferQueue->globalWriteTicket = bufferQueue->globalReadTicket = 0;
+	bufferQueue->readTicket = bufferQueue->writeTicket = 1;
 
 	pthread_mutex_init(&bufferQueue->ticketLock, NULL);
 	pthread_mutex_init(&bufferQueue->globalTicketLock, NULL);
@@ -175,6 +175,7 @@ bool PendingWrites(struct BufferQueue* bufferQueue)
 {
 	if(bufferQueue->pendingWrites > 0)
 	{
+		bufferQueue->pendingWrites--;
 		IncrementTicket(&bufferQueue->globalWriteTicket, &bufferQueue->globalWriteTicketLock);
 		return true;
 	}
@@ -182,8 +183,9 @@ bool PendingWrites(struct BufferQueue* bufferQueue)
 
 bool PendingReads(struct BufferQueue* bufferQueue)
 {
-	if(bufferQueue->pendingWrites > 0)
+	if(bufferQueue->pendingReads > 0)
 	{
+		bufferQueue->pendingReads--;
 		IncrementTicket(&bufferQueue->globalReadTicket, &bufferQueue->globalReadlTicketLock);
 		return true;
 	}
@@ -238,6 +240,7 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 	/* Releases current ticket allowing subsequent writers/readers to start working */
 	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
 	
+	
 	return 1;
 }
 
@@ -266,6 +269,7 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	/* If given buffer doesn't contain enough space */
 	if (bytesCount > bufferSize)
 	{
+		printf("Fatal\n");
 		PendingWrites(bufferQueue);
 		/* Increment ticket for next readers/writers be able to start */
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
