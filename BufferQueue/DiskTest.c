@@ -49,7 +49,7 @@ void UseDisk(struct DiskScheduler * scheduler, const char* filename)
         message->diskBlock = i + 1; /* Don't write in the first block */
         message->id = i;
         message->messageType = WriteMessageType;
-        EnqueueThread_B(scheduler->receiver, message, sizeof(struct Message));
+        EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
     }
     int secondCheckum = 0;
     for(int i = 0; i < blocks; i++)

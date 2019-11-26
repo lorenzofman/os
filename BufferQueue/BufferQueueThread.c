@@ -290,13 +290,13 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	{
 		printfpp("Buffer is empty, pendind read\n", myTicket, bufferQueue, false);
 		int myReadTicket = GetMyTicket(&bufferQueue->readTicket, &bufferQueue->readTicketLock);
-		printfpp(" My read ticket is %i, global: %i\n", myTicket, bufferQueue, false, myReadTicket, bufferQueue->globalReadTicket);
+		printfpp("My read ticket is %i, global: %i\n", myTicket, bufferQueue, false, myReadTicket, bufferQueue->globalReadTicket);
 		bufferQueue->pendingReads++;
 		pendingRead = true;
 		/* Releases current ticket allowing subsequent writers/readers to start working */
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
 		WaitTicketTurn(myReadTicket, &bufferQueue->globalReadTicket);
-		printfpp("Some data has been added to buffer\n", bufferQueue->name, myTicket, false);
+		printfpp("Some data has been added to buffer\n", myTicket, bufferQueue, false);
 	}
 
 	/* Reads the header */
