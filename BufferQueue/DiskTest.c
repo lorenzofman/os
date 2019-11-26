@@ -6,6 +6,7 @@
 #include "BufferQueueThread.h"
 #include "DiskScheduler.h"
 #include "Message.h"
+#include "Constants.h"
 #define BLOCKS 1024
 #define BLOCKSIZE 512
 #define CYLINDERS 32
@@ -49,9 +50,10 @@ void UseDisk(struct DiskScheduler * scheduler, const char* filename)
         message->diskBlock = i + 1; /* Don't write in the first block */
         message->id = i;
         message->messageType = WriteMessageType;
+        message->safe = DISK_ID;
         EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
     }
-    Sleep(10000000);
+    Sleep(1000 * 1000 * 999);
     int secondCheckum = 0;
     for(int i = 0; i < blocks; i++)
     {
@@ -60,6 +62,7 @@ void UseDisk(struct DiskScheduler * scheduler, const char* filename)
         struct Message* msg = (struct Message*) msgBuf;
         for (int j = 0; j < blockSize; j++)
         {
+            printf("%c", *(msg->buffer + j));
             secondCheckum ^= *(msg->buffer + j);
         }
     }

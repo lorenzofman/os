@@ -41,7 +41,7 @@ struct BufferQueue* CreateBufferThreaded(int size, char* name)
 	pthread_mutex_init(&bufferQueue->globalTicketLock, NULL);
 
 	pthread_mutex_init(&bufferQueue->readTicketLock, NULL);
-	pthread_mutex_init(&bufferQueue->globalReadlTicketLock, NULL);
+	pthread_mutex_init(&bufferQueue->globalReadTicketLock, NULL);
 
 	pthread_mutex_init(&bufferQueue->writeTicketLock, NULL);
 	pthread_mutex_init(&bufferQueue->globalWriteTicketLock, NULL);
@@ -198,7 +198,6 @@ bool PendingWrites(struct BufferQueue* bufferQueue)
 {
 	if(bufferQueue->pendingWrites > 0)
 	{
-		bufferQueue->pendingWrites--;
 		IncrementTicket(&bufferQueue->globalWriteTicket, &bufferQueue->globalWriteTicketLock);
 		return true;
 	}
@@ -208,17 +207,17 @@ bool PendingReads(struct BufferQueue* bufferQueue)
 {
 	if(bufferQueue->pendingReads > 0)
 	{
-		bufferQueue->pendingReads--;
-		IncrementTicket(&bufferQueue->globalReadTicket, &bufferQueue->globalReadlTicketLock);
+		IncrementTicket(&bufferQueue->globalReadTicket, &bufferQueue->globalReadTicketLock);
 		return true;
 	}
 }
 
 int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
+	printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, true, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
 	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
-	printfpp("Acquiring ticket; Global: %i\n", myTicket, bufferQueue, true, bufferQueue->globalTicket);
+	Sleep(1000);
 	printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
@@ -248,33 +247,30 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 	/* Update buffer used size*/
 	UpdateUsedSize(bufferQueue, totalSize);
 
-	printfpp("Writing completed\n", myTicket, bufferQueue, true);
-	/* A read might cause subsequent writings*/
-	/* E.g a block of size 32KB is blocked because buffer is full */
-	/* Another block of 16 KB too */
-	/* 128 KB block is read */
-	/* Read will call the first pending write */
-	/* This pending write must see if there are no other pending writes */
-	if(PendingReads(bufferQueue) == false)
-	{
-		if(PendingWrites(bufferQueue))
-		{
-			printfpp("Trigger pending write, write global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalWriteTicket);
-		}
-	}
-	else
-	{
-		printfpp("Trigger pending read, read global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalReadTicket);
-	}
 
 	if(pendingWrite)
 	{
 		printfpp("Pending write released\n", myTicket, bufferQueue, true);
 		bufferQueue->pendingWrites--;
 	}
-	printfpp("Incrementing global ticket\n", myTicket, bufferQueue, true);
-	/* Releases current ticket allowing subsequent writers/readers to start working */
-	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+
+	printfpp("Writing completed\n", myTicket, bufferQueue, true);
+	printfpp("%i Pending reads; %i Pending writes\n", myTicket, bufferQueue, true,  bufferQueue->pendingReads, bufferQueue->pendingWrites);
+
+	if(PendingReads(bufferQueue))
+	{
+		printfpp("Trigger pending read, read global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalReadTicket);
+	}
+	else if(PendingWrites(bufferQueue))
+	{
+		printfpp("Trigger pending write, write global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalWriteTicket);
+	}
+	else
+	{
+		printfpp("Incrementing global ticket\n", myTicket, bufferQueue, true);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+	}
+
 	printfpp("Success\n", myTicket, bufferQueue, true);
 	
 	return 1;
@@ -323,18 +319,29 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 
 	/* Read data from bufferQueue into buffer */
 	ReadData(bufferQueue, buffer, bytesCount);
-	
-	if(PendingWrites(bufferQueue))
-	{
-		printfpp("Calling pending writes\n", myTicket, bufferQueue, false);
-	}
-	
+	printfpp("%i Reading completed\n", myTicket, bufferQueue, true);
+	printfpp("%i Pending reads; %i Pending writes\n", myTicket, bufferQueue, false, bufferQueue->pendingReads, bufferQueue->pendingWrites);
 	if (pendingRead)
 	{
+		printfpp("Pending read released\n", myTicket, bufferQueue, false);
 		bufferQueue->pendingReads--;
 	}
-	/* Increment ticket for next readers/writers be able to start */
-	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+
+	if (PendingWrites(bufferQueue))
+	{
+		printfpp("Trigger pending write, write global ticket is now: %i\n", myTicket, bufferQueue, false,  bufferQueue->globalWriteTicket);
+	}
+	else if (PendingReads(bufferQueue))
+	{
+		printfpp("Trigger pending read, read global ticket is now: %i\n", myTicket, bufferQueue, false,  bufferQueue->globalReadTicket);
+	}
+	else
+	{
+		printfpp("Incrementing global ticket\n", myTicket, bufferQueue, false);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+	}
+	
+	
 	printfpp("Success\n", myTicket, bufferQueue, false);
     return bytesCount;
 }

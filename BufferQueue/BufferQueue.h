@@ -19,7 +19,7 @@ struct BufferQueue
 	int readTicket;
 	int globalReadTicket;
 	pthread_mutex_t readTicketLock;
-	pthread_mutex_t globalReadlTicketLock;
+	pthread_mutex_t globalReadTicketLock;
 
 	int writeTicket;
 	int globalWriteTicket;

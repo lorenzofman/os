@@ -10,6 +10,7 @@ enum MessageType
 
 struct Message
 {
+    int safe;
     enum MessageType messageType;
     /* 
         Depends on MessageType:

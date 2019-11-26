@@ -16,6 +16,7 @@ struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint superf
 {
     uint size = blocks * blockSize;
     struct Disk *disk = (struct Disk *)malloc(size);
+    disk->diskIdentifier = DISK_ID;
     disk->blocks = blocks;
     disk->blockSize = blockSize;
     disk->cylinders = cylinders;
