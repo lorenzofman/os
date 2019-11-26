@@ -51,6 +51,7 @@ void UseDisk(struct DiskScheduler * scheduler, const char* filename)
         message->messageType = WriteMessageType;
         EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
     }
+    Sleep(10000000);
     int secondCheckum = 0;
     for(int i = 0; i < blocks; i++)
     {

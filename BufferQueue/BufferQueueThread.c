@@ -51,7 +51,7 @@ struct BufferQueue* CreateBufferThreaded(int size, char* name)
 
 
 /* Printf++ */
-void printfpp(char* format, int idx, struct BufferQueue* queue, bool enqueue , ... )
+int printfpp(char* format, int idx, struct BufferQueue* queue, bool enqueue , ... )
 {
 	int result = 0;
     va_list args;
@@ -308,7 +308,7 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	/* If given buffer doesn't contain enough space */
 	if (bytesCount > bufferSize)
 	{
-		printfpp("Fatal\n", bufferQueue->name, myTicket, false);
+		printfpp("Fatal\n", myTicket, bufferQueue, false);
 		PendingWrites(bufferQueue);
 		/* Increment ticket for next readers/writers be able to start */
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
@@ -326,7 +326,7 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	
 	if(PendingWrites(bufferQueue))
 	{
-		printfpp("Calling pending writes\n", bufferQueue->name, myTicket, false);
+		printfpp("Calling pending writes\n", myTicket, bufferQueue, false);
 	}
 	
 	if (pendingRead)
@@ -335,7 +335,7 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	}
 	/* Increment ticket for next readers/writers be able to start */
 	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
-
+	printfpp("Success\n", myTicket, bufferQueue, false);
     return bytesCount;
 }
 

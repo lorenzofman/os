@@ -22,13 +22,13 @@ struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue*
 void ProcessReadRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
     Read(scheduler->disk, message->diskBlock, message->buffer);
-    EnqueueThread_B(scheduler->sender, (byte*) message, sizeof(struct Message));
+    //EnqueueThread_B(scheduler->sender, (byte*) message, sizeof(struct Message));
 }
 
 void ProcessWriteRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
     Write(scheduler->disk, message->diskBlock, message->buffer);
-    EnqueueThread_B(scheduler->sender, (byte*) message, sizeof(struct Message));
+    //EnqueueThread_B(scheduler->sender, (byte*) message, sizeof(struct Message));
 }
 
 void ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
