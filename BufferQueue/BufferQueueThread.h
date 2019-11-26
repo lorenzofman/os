@@ -4,7 +4,7 @@
 #include "BufferQueue.h"
 #include <stdbool.h>
 
-struct BufferQueue* CreateBufferThreaded(int size);
+struct BufferQueue* CreateBufferThreaded(int size, char * name);
 
 int EnqueueThread_NB(struct BufferQueue* buffer, byte* data, int dataLength);
 

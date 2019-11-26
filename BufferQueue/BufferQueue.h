@@ -28,6 +28,8 @@ struct BufferQueue
 
 	int pendingReads;
 	int pendingWrites;
+
+	char name[100]; 
 };
 
 byte* IncrementedPointer(struct BufferQueue* queue, byte* pointer, int amount);

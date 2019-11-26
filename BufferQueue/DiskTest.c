@@ -49,16 +49,17 @@ void UseDisk(struct DiskScheduler * scheduler, const char* filename)
         message->diskBlock = i + 1; /* Don't write in the first block */
         message->id = i;
         message->messageType = WriteMessageType;
-        EnqueueThread_B(scheduler->receiver, buf, sizeof(struct Message));
+        EnqueueThread_B(scheduler->receiver, message, sizeof(struct Message));
     }
     int secondCheckum = 0;
     for(int i = 0; i < blocks; i++)
     {
-        byte* buf = (byte*) malloc(blockSize);
-        DequeueThread_B(scheduler->sender, buf, sizeof(struct Message)); 
+        byte* msgBuf = (byte*) malloc(sizeof(struct Message));
+        DequeueThread_B(scheduler->sender, msgBuf, sizeof(struct Message)); 
+        struct Message* msg = (struct Message*) msgBuf;
         for (int j = 0; j < blockSize; j++)
         {
-            secondCheckum ^= *(buf + j);
+            secondCheckum ^= *(msg->buffer + j);
         }
     }
 
@@ -77,8 +78,8 @@ void UseDisk(struct DiskScheduler * scheduler, const char* filename)
 int main()
 {
     struct Disk* disk = CreateDisk(BLOCKS, BLOCKSIZE, CYLINDERS, SUPERFICIES, SECTORS_PER_TRACK, RPM, SEARCH_OVERHEAD_TIME, TRANSFER_TIME, CYLINDER_TIME);
-    struct BufferQueue* receiverBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE);
-    struct BufferQueue* senderBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE);
+    struct BufferQueue* receiverBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Receiver");
+    struct BufferQueue* senderBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Sender");
     struct DiskScheduler* diskScheduler = CreateDiskScheduler(disk, receiverBufferQueue, senderBufferQueue);
     StartDiskScheduler(diskScheduler);
     UseDisk(diskScheduler, "Samples/sample.txt");

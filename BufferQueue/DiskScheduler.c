@@ -7,6 +7,7 @@
 #include "Disk.h"
 #include "Types.h"
 #include "Message.h"
+#include <stdarg.h>
 
 
 struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver, struct BufferQueue* sender)
@@ -21,13 +22,13 @@ struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue*
 void ProcessReadRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
     Read(scheduler->disk, message->diskBlock, message->buffer);
-    EnqueueThread_B(scheduler->sender, message, scheduler->disk->blockSize);
+    EnqueueThread_B(scheduler->sender, (byte*) message, sizeof(struct Message));
 }
 
 void ProcessWriteRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
     Write(scheduler->disk, message->diskBlock, message->buffer);
-    EnqueueThread_B(scheduler->sender, message, scheduler->disk->blockSize);
+    EnqueueThread_B(scheduler->sender, (byte*) message, sizeof(struct Message));
 }
 
 void ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
@@ -55,7 +56,6 @@ void* Schedule(void* varg)
     {
         DequeueThread_B(diskScheduler->receiver, block, messageSize);
         struct Message* message = (struct Message*)block;
-        printf("MessageType: %i\n", message->messageType);
         ProcessMessage(diskScheduler, message);
     }
 }
