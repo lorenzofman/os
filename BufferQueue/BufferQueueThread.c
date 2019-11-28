@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include "Sleep.h"
-
+//#define DEBUG
 
 #define WAIT_TIME 1
 
@@ -53,6 +53,7 @@ struct BufferQueue* CreateBufferThreaded(int size, char* name)
 /* Printf++ */
 int printfpp(char* format, int idx, struct BufferQueue* queue, bool enqueue , ... )
 {
+	#ifdef DEBUG
 	int result = 0;
     va_list args;
     va_start(args, format);
@@ -69,6 +70,9 @@ int printfpp(char* format, int idx, struct BufferQueue* queue, bool enqueue , ..
 
     va_end(args);
 	return result;
+	#else
+	return 0;
+	#endif
 
 }
 
@@ -217,7 +221,6 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 	printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, true, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
 	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
-	Sleep(1000);
 	printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;

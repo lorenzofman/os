@@ -4,8 +4,8 @@ OARGS=-t
 OUTPUT=Program.out
 ITERATIONS=42
 all: main run
-main: BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o DiskTest.c Sleep.o Constants.h
-	$(COMPILER) BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o Sleep.o Constants.h DiskTest.c -o $(OUTPUT) $(ARGS)
+main: BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o DiskTest.c Sleep.o Message.o Client.o Constants.h
+	$(COMPILER) BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o Sleep.o Message.o Client.o Constants.h DiskTest.c -o $(OUTPUT) $(ARGS)
 
 DiskScheduler.o: Disk.o BufferQueue.o BufferQueueThread.o DiskScheduler.c
 	$(COMPILER) -c Disk.o BufferQueue.o BufferQueueThread.o DiskScheduler.c $(ARGS)
@@ -18,6 +18,11 @@ BufferQueueThread.o: BufferQueueThread.c BufferQueue.o Sleep.o
 
 BufferQueue.o: BufferQueue.c
 	$(COMPILER) -c BufferQueue.c $(ARGS)
+
+Client.o: Client.c
+	$(COMPILER) -c Client.c $(ARGS)
+Message.o: Message.c
+	$(COMPILER) -c Message.c $(ARGS)
 
 Sleep.o: Sleep.c
 	$(COMPILER) -c Sleep.c $(ARGS)

@@ -97,7 +97,6 @@ double WaitTill(struct Disk* disk, int block)
     double start = Now();
     double totalSearchTime = 0;
     int cylinder = block / (disk->superficies * disk->sectorsPerTrack);
-    
     if(cylinder != disk->currentCylinder)
     {
         uint seekTime = disk->searchOverheadTime;
@@ -121,7 +120,6 @@ double WaitTill(struct Disk* disk, int block)
     }
 
     double afterWaitRot = timeAfterSeek + rotationalWait;
-
     return afterWaitRot + disk->transferTime;
 }
 
@@ -139,7 +137,8 @@ void *BlockEnd(struct Disk* disk, int block)
 void Read(struct Disk* disk, int block, void* buf)
 {
     double end = WaitTill(disk, block);
-    Sleep(end - Now() * 1e9);
+    double time = (end - Now()) * 1e3;
+    Sleep(time);
     UpdateDiskCylinder(disk, block);
     memcpy(buf, BlockEnd(disk, block), disk->blockSize);
 }
@@ -147,7 +146,8 @@ void Read(struct Disk* disk, int block, void* buf)
 void Write(struct Disk* disk, int block, void *buf)
 {
     double end = WaitTill(disk, block);
-    Sleep(end - Now() * 1e9);
+    double time = (end - Now()) * 1e3;
+    Sleep(time);
     UpdateDiskCylinder(disk, block);
     memcpy(BlockEnd(disk, block), buf, disk->blockSize);
 }

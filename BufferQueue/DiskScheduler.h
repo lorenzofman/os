@@ -4,10 +4,9 @@ struct DiskScheduler
 {
     struct Disk * disk;
     struct BufferQueue * receiver;
-    struct BufferQueue * sender;
 };
 
-struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver, struct BufferQueue* sender);
+struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver);
 
 void StartDiskScheduler(struct DiskScheduler* diskScheduler);
 

@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include "Disk.h"
-#include "BufferQueue.h"
 #include "BufferQueueThread.h"
 #include "DiskScheduler.h"
-#include "Message.h"
-#include "Constants.h"
+#include "Client.h"
+
 #define BLOCKS 1024
 #define BLOCKSIZE 512
 #define CYLINDERS 32
@@ -19,72 +17,17 @@
     
 #define MESSAGES_WINDOW_SIZE 2048 /* One message uses only 16 bytes */
 
-void UseDisk(struct DiskScheduler * scheduler, const char* filename)
-{
-    FILE * file = fopen(filename, "r");
-    int checksum = 0;
-
-    if(file == NULL)
-    { 
-        printf("File doesn't exist\n");
-        return;
-    }
-    while (!feof(file) && !ferror(file)) 
-    {
-        char c = fgetc(file);
-        checksum ^= c;
-    }
-    int size = ftell(file);
-
-    
-    rewind(file);
-
-    int blockSize = scheduler->disk->blockSize;
-    int blocks = (int) ceil ((double) size / blockSize);
-    for(int i = 0; i < blocks; i++)
-    {
-        byte* buf = (byte*) malloc(blockSize);
-        int result = fread(buf, blockSize, 1, file);
-        struct Message *message = malloc(sizeof(struct Message));
-        message->buffer = buf;
-        message->diskBlock = i + 1; /* Don't write in the first block */
-        message->id = i;
-        message->messageType = WriteMessageType;
-        message->safe = DISK_ID;
-        EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
-    }
-    Sleep(1000 * 1000 * 999);
-    int secondCheckum = 0;
-    for(int i = 0; i < blocks; i++)
-    {
-        byte* msgBuf = (byte*) malloc(sizeof(struct Message));
-        DequeueThread_B(scheduler->sender, msgBuf, sizeof(struct Message)); 
-        struct Message* msg = (struct Message*) msgBuf;
-        for (int j = 0; j < blockSize; j++)
-        {
-            printf("%c", *(msg->buffer + j));
-            secondCheckum ^= *(msg->buffer + j);
-        }
-    }
-
-    if(checksum == secondCheckum)
-    {
-        printf("Urray\n");
-    }
-    else 
-    {
-        printf("Debugging: here we go again\n");
-    }
-
-}
 
 
 int main()
 {
     struct Disk* disk = CreateDisk(BLOCKS, BLOCKSIZE, CYLINDERS, SUPERFICIES, SECTORS_PER_TRACK, RPM, SEARCH_OVERHEAD_TIME, TRANSFER_TIME, CYLINDER_TIME);
-    struct BufferQueue* receiverBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Receiver");
-    struct BufferQueue* senderBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Sender");
-    struct DiskScheduler* diskScheduler = CreateDiskScheduler(disk, receiverBufferQueue, senderBufferQueue);
+    struct BufferQueue* schedulerBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Receiver");
+    struct DiskScheduler* diskScheduler = CreateDiskScheduler(disk, schedulerBufferQueue);
+    struct BufferQueue* clientBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Receiver");    
+    struct Client* client = CreateClient(clientBufferQueue);
+
     StartDiskScheduler(diskScheduler);
-    UseDisk(diskScheduler, "Samples/sample.txt");
+    CopyFileToDisk(client, diskScheduler, "Samples/sample.txt", false);
+    printf("Operation succeded\n");
 }
