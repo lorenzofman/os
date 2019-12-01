@@ -11,23 +11,56 @@
 #include "Constants.h"
 
 
-struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver)
+struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver, int sectorInterleaving, int messageRequestsBufferSize)
 {
     struct DiskScheduler* diskScheduler = (struct DiskScheduler*)malloc(sizeof(struct DiskScheduler));
     diskScheduler->disk = disk;
     diskScheduler->receiver = receiver;
+    diskScheduler->sectorInterleaving = sectorInterleaving;
+    diskScheduler->messageRequests = (struct Message*) malloc(messageRequestsBufferSize * sizeof(struct Message));
     return diskScheduler;
+}
+int SectorInterleaving(struct DiskScheduler * scheduler, int block)
+{
+    int tracks = scheduler->disk->cylinders;
+    // printf("Tracks: %i\n", tracks);
+
+    int sectorsPerTrack = scheduler->disk->sectorsPerTrack;
+    // printf("Sectors per track: %i\n", sectorsPerTrack);
+
+    int track = block / sectorsPerTrack;
+    // printf("Current track: %i\n", track);
+
+    // printf("Sectors per track: %i\n", sectorsPerTrack);
+    // printf("Current track sectors: %i - %i\n", track *  sectorsPerTrack, (track+1) * sectorsPerTrack - 1);
+
+    int blockInTrack = block % sectorsPerTrack;
+    // printf("Sector in track: %i\n", blockInTrack);
+
+    int n = scheduler->sectorInterleaving;
+    // printf("Sector interleaving: %i\n", n);
+
+
+    int interleaved = (blockInTrack * n) % sectorsPerTrack + (blockInTrack * n) / sectorsPerTrack;
+    // printf("Interleaved: %i\n", interleaved);
+
+    int final = interleaved + track * scheduler->disk->sectorsPerTrack; 
+    // printf("Original block: %i, resulted block: %i\n", block, final);
+
+    return final; 
 }
 
 void ProcessReadRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
-    Read(scheduler->disk, message->diskBlock, message->buf);
+    int interceptedBlock = SectorInterleaving(scheduler, message->diskBlock);
+    Read(scheduler->disk, interceptedBlock, message->buf);
     EnqueueThread_B(message->clientBuffer, (byte*) message, sizeof(struct Message));
 }
 
 void ProcessWriteRequest(struct DiskScheduler * scheduler, struct Message* message)
 {
-    Write(scheduler->disk, message->diskBlock, message->buf);
+    int interceptedBlock = SectorInterleaving(scheduler, message->diskBlock);
+    Write(scheduler->disk, interceptedBlock, message->buf);
     EnqueueThread_B(message->clientBuffer, (byte*) message, sizeof(struct Message));
 }
 

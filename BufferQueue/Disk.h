@@ -7,7 +7,7 @@ struct Disk
     uint blocks;
     uint blockSize;
     uint cylinders;
-    uint superficies;
+    uint surfaces;
     uint sectorsPerTrack;
     uint rpm;
     uint searchOverheadTime; /* (μs) */
@@ -16,7 +16,7 @@ struct Disk
     uint currentCylinder;
 };
 
-struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint superficies, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime);
+struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint surfaces, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime);
 
 struct Disk* CreateDiskFromFile(char *fileName);
 

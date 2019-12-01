@@ -5,6 +5,7 @@
 #include "Client.h"
 #include "BufferQueueThread.h"
 #include <math.h>
+#include <time.h>
 
 struct Client* CreateClient(struct BufferQueue* bufferQueue)
 {
@@ -92,11 +93,10 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     int blockSize = scheduler->disk->blockSize;
     int blocks = (int) ceil ((double) size / blockSize);
     int * blocksIdxs = sequential ? SequentialBlocks(scheduler->disk, blocks) : RandomBlocks(scheduler->disk, blocks);
-    for(int i = 0; i< blocks; i++)
-    {
-        printf("%i\n", blocksIdxs[i]);
-    }
-    clock_t start = clock();
+    
+    struct timespec start, finish;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     for(int i = 0; i < blocks; i++)
     {
         byte* buf = (byte*) malloc(blockSize);
@@ -109,7 +109,10 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     {
         struct Message message;
         DequeueThread_B(client->buffer, &message, sizeof(struct Message));
-    }
-    clock_t end = clock();
-    printf("Copied file in %.3lf ms\n", (double)(end - start) / (CLOCKS_PER_SEC/1000));
+    };
+    clock_gettime(CLOCK_MONOTONIC, &finish);
+    double elapsed = (finish.tv_sec - start.tv_sec);
+    elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+    printf("Copied file in %lf ms\n", elapsed * 1e3);
+
 }

@@ -12,7 +12,7 @@
 #include "Constants.h"
 #include "Sleep.h"
 
-struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint superficies, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime)
+struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint surfaces, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime)
 {
     uint size = blocks * blockSize;
     struct Disk *disk = (struct Disk *)malloc(size);
@@ -20,7 +20,7 @@ struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint superf
     disk->blocks = blocks;
     disk->blockSize = blockSize;
     disk->cylinders = cylinders;
-    disk->superficies = superficies;
+    disk->surfaces = surfaces;
     disk->sectorsPerTrack = sectorsPerTrack;
     disk->rpm = rpm;
     disk-> searchOverheadTime = searchOverheadTime;
@@ -94,38 +94,52 @@ double Now()
 
 double WaitTill(struct Disk* disk, int block)
 {
-    double start = Now();
+    double start = Now(); // s
     double totalSearchTime = 0;
-    int cylinder = block / (disk->superficies * disk->sectorsPerTrack);
+    int cylinder = block / (disk->surfaces * disk->sectorsPerTrack);
     if(cylinder != disk->currentCylinder)
     {
-        uint seekTime = disk->searchOverheadTime;
-        seekTime += ABS(cylinder - disk->currentCylinder) * disk->cylinderTime;
-        totalSearchTime = seekTime / 1e6;
+        uint seekTime = disk->searchOverheadTime; // μs 
+        int target = cylinder;
+        int current = disk->currentCylinder;
+        int cylinderDif = target - current;
+        int absCylinderDif = ABS(cylinderDif);
+        seekTime += absCylinderDif * disk->cylinderTime; // μs  
+        totalSearchTime = seekTime / 1e6; // s
     }
 
-    double timeAfterSeek = start + totalSearchTime;
-    double rps = disk->rpm / 60.0;
-    double fullRotationTime = 1.0 / rps; // seconds per full rotation
-    long completedRotations = timeAfterSeek / fullRotationTime; 
-    double rotationTime = timeAfterSeek - completedRotations * fullRotationTime; 
-    double oneSectorTime = rps / disk->sectorsPerTrack; // seconds per sector rotation
-    int sector = block % disk->sectorsPerTrack;
-    double sectorTime = sector * oneSectorTime;
-    double rotationalWait = sectorTime - rotationTime;
+
+    double timeAfterSeek = start + totalSearchTime; // s
+    double rps = disk->rpm / 60.0; // r/s
+    double fullRotationTime = 1.0 / rps; // s/r
+    long long completedRotations = timeAfterSeek / fullRotationTime;
+    double rotationTime = timeAfterSeek - completedRotations * fullRotationTime;
     
+    double oneSectorTime = fullRotationTime / disk->sectorsPerTrack; // seconds per sector rotation
+    int sector = block % disk->sectorsPerTrack;
+    double sectorTime = sector * oneSectorTime; // seconds
+    double rotationalWait = sectorTime - rotationTime; // seconds
+
     if(rotationalWait < 0)
     {
         rotationalWait += rotationTime;
     }
+    
+    //printf("Seek time: %lf ms\n", (double) totalSearchTime * 1e3);
+    //printf("Rotational wait time: %lf ms\n", rotationalWait * 1e3);
+
+    //printf("Accumulated rot wait time: %lf ms\n", allRotationalWaits * 1e3);
+
+    //printf("Transfer time: %lf ms\n\n", (double) disk->transferTime *1e-3);
+
 
     double afterWaitRot = timeAfterSeek + rotationalWait;
-    return afterWaitRot + disk->transferTime;
+    return afterWaitRot + disk->transferTime/1e6; // in seconds
 }
 
 void UpdateDiskCylinder(struct Disk * disk, int block)
 {
-    int cylinder = block / (disk->superficies * disk->sectorsPerTrack);
+    int cylinder = block / (disk->surfaces * disk->sectorsPerTrack);
     disk->currentCylinder = cylinder;
 }
 
@@ -137,7 +151,8 @@ void *BlockEnd(struct Disk* disk, int block)
 void Read(struct Disk* disk, int block, void* buf)
 {
     double end = WaitTill(disk, block);
-    double time = (end - Now()) * 1e3;
+    double time = (end - Now()) * 1e9;
+    //printf("Read operation took: %lf ms\n", time/1e6);
     Sleep(time);
     UpdateDiskCylinder(disk, block);
     memcpy(buf, BlockEnd(disk, block), disk->blockSize);
@@ -146,7 +161,9 @@ void Read(struct Disk* disk, int block, void* buf)
 void Write(struct Disk* disk, int block, void *buf)
 {
     double end = WaitTill(disk, block);
-    double time = (end - Now()) * 1e3;
+    //printf("Start: %lf; End: %lf\n", Now(), end);    
+    double time = (end - Now()) * 1e9;
+    //printf("Write operation took: %lf ms\n", time/1e6);
     Sleep(time);
     UpdateDiskCylinder(disk, block);
     memcpy(BlockEnd(disk, block), buf, disk->blockSize);
