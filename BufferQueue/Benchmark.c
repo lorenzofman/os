@@ -7,8 +7,8 @@
 #include <string.h>
 #define READERS 1
 #define WRITERS 1
-#define BUFFERSIZE 1024 * 4 * 4 * 4
-#define BLOCKSIZE (1024 - 4)
+#define BUFFERSIZE 1024 * 1024 * 64
+#define BLOCKSIZE (1024 * 1024 - 4)
 #define THREADS
 
 struct QueueParameter
@@ -62,14 +62,14 @@ void *DequeueData(void* varg)
 	int blocksPerReader = blocks/READERS;
 	for(int j = 0; j < blocksPerReader; j++)
 	{
-		DequeueThread_B(queueParameter->bufferQueue, queueParameter->data, rand()%BLOCKSIZE);
+		DequeueThread_B(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
 	}
 	return NULL;
 }
 
 int ThreadBenchmark()
 {
-	struct BufferQueue* bufferQueue = CreateBufferThreaded(BUFFERSIZE);
+	struct BufferQueue* bufferQueue = CreateBufferThreaded(BUFFERSIZE, "Test");
 	pthread_t* readers = (pthread_t*)malloc(sizeof(pthread_t) * READERS);
 	if (readers == NULL)
 	{
@@ -203,8 +203,6 @@ int main(int argc, char *argv[])
 			return Benchmark();
 		#endif
 	#else
-		printf("Threaded Benchmark\n");
-		return Benchmark();
 		if(argc > 0)
 		{
 			for(int i = 0; i < argc; i++)
