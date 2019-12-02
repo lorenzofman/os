@@ -23,7 +23,7 @@ struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint surfac
     disk->surfaces = surfaces;
     disk->sectorsPerTrack = sectorsPerTrack;
     disk->rpm = rpm;
-    disk-> searchOverheadTime = searchOverheadTime;
+    disk->searchOverheadTime = searchOverheadTime;
     disk->transferTime = transferTime;
     disk->cylinderTime = cylinderTime;
     disk->currentCylinder = 0;

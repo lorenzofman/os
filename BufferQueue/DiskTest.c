@@ -42,7 +42,6 @@ int main()
 
     pthread_t scheduler = StartDiskScheduler(diskScheduler);
     CopyFileToDisk(client, diskScheduler, "Samples/sample.txt", false);
-    printf("Operation succeded\n");
     StopDiskScheduler(diskScheduler);
     pthread_join(scheduler, NULL);
     DestroyClient(client);

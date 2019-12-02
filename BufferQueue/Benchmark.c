@@ -151,6 +151,14 @@ int ThreadBenchmark()
 	printf("Velocity = %s/s\n", SizeString(throughput, buffer));
 	DestroyBuffer(bufferQueue);
 	free(buffer);
+	for(int i = 0; i < (READERS + WRITERS); i++)
+	{
+		free(queueParameters[i]->data);
+		free(queueParameters[i]);
+	}
+	free(readers);
+	free(writers);
+	free(queueParameters);
 	return 0;
 }
 
@@ -218,13 +226,12 @@ int main(int argc, char *argv[])
 		}
 		printf("Non-threaded Benchmark\n");
 		printf("Buffer Size; Block Size; Velocity\n");
-		for(long long i = 1024 * 64; i <= 1024 * 1024 * 1024; i*=2)
+		for(long long i = 1024 * 64; i <= 1024 * 1024 * 4; i*=2)
 		{
-			for(long long j = 8; j <= i; j *= 2)
+			for(long long j = 1024 * 64; j <= i; j *= 2)
 			{
 				Benchmark(i, j - 4);
 			}
 		}
-		printf("END\n");
 	#endif
 }
