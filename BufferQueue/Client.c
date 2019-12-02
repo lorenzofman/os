@@ -20,6 +20,12 @@ void Swap(int * array, int i, int j)
     array[j] = tmp;
 }
 
+void DestroyClient(struct Client* client)
+{
+    DestroyBufferQueueThreaded(client->buffer);
+    free(client);
+}
+
 /* Generates a sequence of sequential indexes without exceeding the number of disk blocks */
 /* Also avoids writing in the first block */
 int* SequentialBlocks(struct Disk* disk, int n)
@@ -84,7 +90,7 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     }
     while (!feof(file) && !ferror(file)) 
     {
-        char c = fgetc(file);
+        fgetc(file);
     }
     int size = ftell(file);
 
@@ -96,14 +102,17 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     
     struct timespec start, finish;
     clock_gettime(CLOCK_MONOTONIC, &start);
-
+    byte** blocksArr = malloc(sizeof(byte*) * blocks);
     for(int i = 0; i < blocks; i++)
     {
-        byte* buf = (byte*) malloc(blockSize);
+        byte* buf = blocksArr[i] = (byte*) malloc(blockSize);
         fread(buf, blockSize, 1, file);
         struct Message *message = CreateMessage(WriteMessageType, client->buffer, blocksIdxs[i], i, buf);
         EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
+        free(message);
     }
+    fclose(file);
+    free(blocksIdxs);
     /* Wait for message confirmations */
     for(int i = 0; i < blocks; i++)
     {
@@ -114,5 +123,11 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     double elapsed = (finish.tv_sec - start.tv_sec);
     elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
     printf("Copied file in %lf ms\n", elapsed * 1e3);
+
+    for (int i = 0; i < blocks; i++)
+    {
+        free(blocksArr[i]);
+    }
+    free(blocksArr);
 
 }

@@ -7,7 +7,7 @@
 #include <string.h>
 #define READERS 1
 #define WRITERS 1
-#define BUFFERSIZE 1024 * 1024 * 64
+#define BUFFERSIZE 1024 * 1024 * 256
 #define BLOCKSIZE (1024 * 1024 - 4)
 #define THREADS
 
@@ -18,7 +18,7 @@ struct QueueParameter
 	byte * data;
 };
 
-char* SizeString(long long i, char* buffer)
+char* SizeString(long long i, char* buffer) 
 {
 	if (buffer == NULL)
 	{
@@ -154,11 +154,11 @@ int ThreadBenchmark()
 	return 0;
 }
 
-int Benchmark()
+int Benchmark(int bufferSize, int blocksize)
 {
-	struct BufferQueue* queue = CreateBuffer(BUFFERSIZE);
-	int blocks = BUFFERSIZE / BLOCKSIZE;
-	byte* data = (byte*)malloc(BLOCKSIZE * sizeof(byte));
+	struct BufferQueue* queue = CreateBuffer(bufferSize);
+	int blocks = bufferSize / blocksize;
+	byte* data = (byte*)malloc(blocksize * sizeof(byte));
 	if (data == NULL)
 	{
 		return 1;
@@ -168,12 +168,12 @@ int Benchmark()
 
 	for (int i = 0; i < blocks; i++)
 	{
-		Enqueue(queue, data, BLOCKSIZE);
+		Enqueue(queue, data, blocksize);
 	}
 
 	for (int i = 0; i < blocks; i++)
 	{
-		Dequeue(queue, data, BLOCKSIZE);
+		Dequeue(queue, data, blocksize);
 	}
 
 	clock_t end = clock();
@@ -181,11 +181,13 @@ int Benchmark()
 	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
 	char* buffer = malloc(10 * sizeof(char));
 
-	double result = (double)BUFFERSIZE / elapsedTime;
+	double result = (double) 2 * bufferSize / elapsedTime;
 	long long throughput = (long long) (result);
-	printf("Time: %lf ms\n", elapsedTime * 1000);
-	printf("Payload: %s\n", SizeString(BUFFERSIZE, buffer));
-	printf("Velocity: %s/s\n", SizeString(throughput, buffer));
+	//printf("Time: %lf ms\n", elapsedTime * 1000);
+	//printf("Blocksize: %s;", SizeString(blocksize, buffer));
+	// printf("Payload: %s;", SizeString(bufferSize, buffer));
+	// printf("Velocity:%s/s\n", SizeString(throughput, buffer));
+	printf("%i;%i;%lld\n", bufferSize, blocksize + 4, throughput);
 	DestroyBuffer(queue);
 	free(data);
 	free(buffer);
@@ -215,6 +217,14 @@ int main(int argc, char *argv[])
 			}
 		}
 		printf("Non-threaded Benchmark\n");
-		return Benchmark();
+		printf("Buffer Size; Block Size; Velocity\n");
+		for(long long i = 1024 * 64; i <= 1024 * 1024 * 1024; i*=2)
+		{
+			for(long long j = 8; j <= i; j *= 2)
+			{
+				Benchmark(i, j - 4);
+			}
+		}
+		printf("END\n");
 	#endif
 }

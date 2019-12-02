@@ -14,6 +14,12 @@ struct Elevator* CreateElevator()
     elevator->previousBlock = 0;
     elevator->lifting = true;
     elevator->pendingMessages = 0;
+    return elevator;
+}
+
+void DestroyElevator(struct Elevator* elevator)
+{
+    free(elevator);
 }
 
 int ElevatorDistance(struct DiskScheduler* scheduler, struct Message message, int lastBlock, bool lifting)
@@ -55,10 +61,12 @@ int BestMessage(struct DiskScheduler* scheduler, struct Elevator* elevator)
 struct Message Escalonate(struct DiskScheduler* scheduler, struct Elevator* elevator)
 {
     uint messageSize = sizeof(struct Message);
+    struct Message message;
     /* Fetch all messages first */
     while(Empty(scheduler->receiver) == false || elevator->pendingMessages == 0)
     {
-        DequeueThread_B(scheduler->receiver, scheduler->messageRequests + elevator->pendingMessages * messageSize, messageSize);
+        DequeueThread_B(scheduler->receiver, &message, messageSize);
+        scheduler->messageRequests[elevator->pendingMessages] = message;
         elevator->pendingMessages++;
     }
     int closestIdx = BestMessage(scheduler, elevator);

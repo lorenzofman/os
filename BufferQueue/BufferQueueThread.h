@@ -6,6 +6,8 @@
 
 struct BufferQueue* CreateBufferThreaded(int size, char * name);
 
+void DestroyBufferQueueThreaded(struct BufferQueue* bufferQueue);
+
 int EnqueueThread_NB(struct BufferQueue* buffer, byte* data, int dataLength);
 
 int DequeueThread_NB(struct BufferQueue* bufferQueue, void* buffer, int bufferSize);

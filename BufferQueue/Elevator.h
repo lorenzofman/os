@@ -12,6 +12,8 @@ struct Elevator
 
 struct Elevator* CreateElevator();
 
+void DestroyElevator(struct Elevator* elevator);
+
 struct Message Escalonate(struct DiskScheduler* scheduler, struct Elevator* elevator);
 
 #endif

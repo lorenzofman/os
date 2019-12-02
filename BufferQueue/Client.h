@@ -10,4 +10,5 @@ struct Client
 };
 struct Client* CreateClient(struct BufferQueue* bufferQueue);
 void CopyFileToDisk(struct Client *client, struct DiskScheduler *scheduler, const char* filename, bool sequential);
+void DestroyClient(struct Client* client);
 #endif

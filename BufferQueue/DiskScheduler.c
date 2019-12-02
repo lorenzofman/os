@@ -10,43 +10,36 @@
 #include "Elevator.h"
 #include <stdarg.h>
 #include "Constants.h"
+#include "Sleep.h"
 
-
-struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver, int sectorInterleaving, int messageRequestsBufferSize)
+struct DiskScheduler *CreateDiskScheduler(struct Disk* disk, struct BufferQueue* receiver, int sectorInterleaving, int messageRequestsBufferSize, bool useElevator)
 {
     struct DiskScheduler* diskScheduler = (struct DiskScheduler*)malloc(sizeof(struct DiskScheduler));
     diskScheduler->disk = disk;
     diskScheduler->receiver = receiver;
     diskScheduler->sectorInterleaving = sectorInterleaving;
     diskScheduler->messageRequests = (struct Message*) malloc(messageRequestsBufferSize * sizeof(struct Message));
+    diskScheduler->useElevator = useElevator;
+    diskScheduler->keepScheduling = true;
+    if(useElevator)
+    {
+        diskScheduler->elevator = CreateElevator();
+    }
     return diskScheduler;
 }
 int SectorInterleaving(struct DiskScheduler * scheduler, int block)
 {
-    int tracks = scheduler->disk->cylinders;
-    // printf("Tracks: %i\n", tracks);
-
     int sectorsPerTrack = scheduler->disk->sectorsPerTrack;
-    // printf("Sectors per track: %i\n", sectorsPerTrack);
 
     int track = block / sectorsPerTrack;
-    // printf("Current track: %i\n", track);
-
-    // printf("Sectors per track: %i\n", sectorsPerTrack);
-    // printf("Current track sectors: %i - %i\n", track *  sectorsPerTrack, (track+1) * sectorsPerTrack - 1);
 
     int blockInTrack = block % sectorsPerTrack;
-    // printf("Sector in track: %i\n", blockInTrack);
 
     int n = scheduler->sectorInterleaving;
-    // printf("Sector interleaving: %i\n", n);
-
 
     int interleaved = (blockInTrack * n) % sectorsPerTrack + (blockInTrack * n) / sectorsPerTrack;
-    // printf("Interleaved: %i\n", interleaved);
 
     int final = interleaved + track * scheduler->disk->sectorsPerTrack; 
-    // printf("Original block: %i, resulted block: %i\n", block, final);
 
     return final; 
 }
@@ -84,18 +77,47 @@ void ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
 void* Schedule(void* varg)
 {
     struct DiskScheduler* diskScheduler = (struct DiskScheduler*) varg;
-    struct Elevator* elevator = CreateElevator();
-    while(true)
+    while(diskScheduler->keepScheduling)
     {
-        struct Message message = Escalonate(diskScheduler, elevator);
+        if(Empty(diskScheduler->receiver) && diskScheduler->elevator->pendingMessages == 0)
+        {
+            Sleep(100000);
+            continue;
+        }
+        struct Message message;
+        if(diskScheduler->useElevator)
+        {
+            message = Escalonate(diskScheduler, diskScheduler->elevator);
+        }
+        else
+        {
+            DequeueThread_B(diskScheduler->receiver, &message, sizeof(struct Message));
+        }
         ProcessMessage(diskScheduler, &message);
-
     }
+    return NULL;
 }
 
-void StartDiskScheduler(struct DiskScheduler* diskScheduler)
+pthread_t StartDiskScheduler(struct DiskScheduler* diskScheduler)
 {
     pthread_t diskThread;
     pthread_create(&diskThread, NULL, Schedule, (void*)diskScheduler);
+    return diskThread;
 }
 
+void DestroyDiskScheduler(struct DiskScheduler* diskScheduler)
+{
+    DestroyBufferQueueThreaded(diskScheduler->receiver);
+    DestroyDisk(diskScheduler->disk);
+    if(diskScheduler->useElevator)
+    {
+        DestroyElevator(diskScheduler->elevator);
+    }
+    free(diskScheduler->messageRequests);
+    free(diskScheduler);
+}
+
+void StopDiskScheduler(struct DiskScheduler* scheduler)
+{
+    scheduler->keepScheduling = false;
+}

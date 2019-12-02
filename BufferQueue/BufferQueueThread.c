@@ -45,8 +45,24 @@ struct BufferQueue* CreateBufferThreaded(int size, char* name)
 
 	pthread_mutex_init(&bufferQueue->writeTicketLock, NULL);
 	pthread_mutex_init(&bufferQueue->globalWriteTicketLock, NULL);
+
+	bufferQueue->pendingWrites = bufferQueue->pendingReads = 0;
 	
 	return bufferQueue;
+}
+
+void DestroyBufferQueueThreaded(struct BufferQueue* bufferQueue)
+{
+	pthread_mutex_destroy(&bufferQueue->ticketLock);
+	pthread_mutex_destroy(&bufferQueue->globalTicketLock);
+
+	pthread_mutex_destroy(&bufferQueue->readTicketLock);
+	pthread_mutex_destroy(&bufferQueue->globalReadTicketLock);
+
+	pthread_mutex_destroy(&bufferQueue->writeTicketLock);
+	pthread_mutex_destroy(&bufferQueue->globalWriteTicketLock);
+
+	DestroyBuffer(bufferQueue);
 }
 
 
@@ -220,7 +236,7 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
 	//printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, true, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
-	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
 	//printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
@@ -282,7 +298,7 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
 	/* Acquire ticket and wait for it's turn */
-	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
 	//printfpp("Acquiring ticket; Global: %i\n", myTicket, bufferQueue, false, bufferQueue->globalTicket);
 	bool pendingRead = false;
 	if (bufferQueue->usedBytes == 0)
