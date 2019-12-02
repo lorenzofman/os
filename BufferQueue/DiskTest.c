@@ -11,8 +11,8 @@
 #define SURFACES 4
 #define SECTORS_PER_TRACK 16
 #define RPM 5400
-#define SEARCH_OVERHEAD_TIME 1
-#define TRANSFER_TIME 600 // 690 microseconds
+#define SEARCH_OVERHEAD_TIME 100
+#define TRANSFER_TIME 600 // 600 microseconds
 
 /* 
     According to wikipedia: The fastest high-end server drives today have a seek time around 4 ms. 
@@ -24,10 +24,9 @@
 #define CYLINDER_TIME (2 * AVERAGE_SEEK_TIME / CYLINDERS)
     
 #define SECTOR_INTERLEAVING 2
-extern double allRotationalWaits;
 #define MESSAGES_WINDOW_SIZE 2048 /* One message uses only 28 bytes */
 
-#define ELEVATOR_MESSAGES_WINDOW_SIZE 96 /* Buffer will look 96 request before choosing the best one */
+#define ELEVATOR_MESSAGES_WINDOW_SIZE 96 /* Buffer will look 96 requests before choosing the best one */
 int main()
 {
     struct Disk* disk = CreateDisk(BLOCKS, BLOCKSIZE, CYLINDERS, SURFACES, SECTORS_PER_TRACK, RPM, SEARCH_OVERHEAD_TIME, TRANSFER_TIME, CYLINDER_TIME);

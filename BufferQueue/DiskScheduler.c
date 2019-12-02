@@ -7,6 +7,7 @@
 #include "Disk.h"
 #include "Types.h"
 #include "Message.h"
+#include "Elevator.h"
 #include <stdarg.h>
 #include "Constants.h"
 
@@ -83,13 +84,12 @@ void ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
 void* Schedule(void* varg)
 {
     struct DiskScheduler* diskScheduler = (struct DiskScheduler*) varg;
-    uint messageSize = sizeof(struct Message);
-    byte* block = (byte*)malloc(messageSize);
+    struct Elevator* elevator = CreateElevator();
     while(true)
     {
-        DequeueThread_B(diskScheduler->receiver, block, messageSize);
-        struct Message* message = (struct Message*)block;
-        ProcessMessage(diskScheduler, message);
+        struct Message message = Escalonate(diskScheduler, elevator);
+        ProcessMessage(diskScheduler, &message);
+
     }
 }
 
