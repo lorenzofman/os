@@ -30,7 +30,7 @@
 #define MESSAGES_WINDOW_SIZE 2048 /* One message uses only 32 bytes */
 #define ELEVATOR_MESSAGES_WINDOW_SIZE 96 /* Elevator will look 96 requests before choosing the best one */
 
-int main()
+void UseDisk(char* file, bool sequential, bool useElevator, int sectorInterleaving)
 {
     struct Disk* disk = CreateDisk(SECTORS_PER_TRACK * CYLINDERS * SURFACES, BLOCKSIZE, CYLINDERS, SURFACES, SECTORS_PER_TRACK, RPM, SEARCH_OVERHEAD_TIME, TRANSFER_TIME, CYLINDER_TIME);
 
