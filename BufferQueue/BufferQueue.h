@@ -14,17 +14,14 @@ struct BufferQueue
 	int ticket;
 	int globalTicket;
 	pthread_mutex_t ticketLock;
-	pthread_mutex_t globalTicketLock;
 
 	int readTicket;
 	int globalReadTicket;
 	pthread_mutex_t readTicketLock;
-	pthread_mutex_t globalReadTicketLock;
 
 	int writeTicket;
 	int globalWriteTicket;
 	pthread_mutex_t writeTicketLock;
-	pthread_mutex_t globalWriteTicketLock;
 
 	int pendingReads;
 	int pendingWrites;

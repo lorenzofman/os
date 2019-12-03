@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define READERS 2
+#define READERS 4
 #define WRITERS 1
 
 struct QueueParameter
