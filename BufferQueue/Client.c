@@ -98,26 +98,34 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
 
     int blockSize = scheduler->disk->blockSize;
     int blocks = (int) ceil ((double) size / blockSize);
+    if(blocks > scheduler->disk->blocks - 1)
+    {
+        printf("File is too big for the disk\n");
+        exit(EXIT_FAILURE);
+    }
     int * blocksIdxs = sequential ? SequentialBlocks(scheduler->disk, blocks) : RandomBlocks(scheduler->disk, blocks);
-    
     struct timespec start, finish;
     clock_gettime(CLOCK_MONOTONIC, &start);
     byte** blocksArr = malloc(sizeof(byte*) * blocks);
+
     for(int i = 0; i < blocks; i++)
     {
         byte* buf = blocksArr[i] = (byte*) malloc(blockSize);
-        int res = fread(buf, blockSize, 1, file);
+        int res = fread(blocksArr[i], blockSize, 1, file);
         if(res == 0)
         {
             printf("Read error\n");
             return;
         }
         struct Message *message = CreateMessage(WriteMessageType, client->buffer, blocksIdxs[i], i, buf);
+
         EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
+
         free(message);
     }
     fclose(file);
     free(blocksIdxs);
+
     /* Wait for message confirmations */
     for(int i = 0; i < blocks; i++)
     {
@@ -128,7 +136,6 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     double elapsed = (finish.tv_sec - start.tv_sec);
     elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
     printf("Copied file in %lf ms\n", elapsed * 1e3);
-
     for (int i = 0; i < blocks; i++)
     {
         free(blocksArr[i]);

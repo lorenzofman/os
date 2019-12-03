@@ -1,5 +1,6 @@
 #include "Message.h"
 #include <stdlib.h>
+#include <stdio.h>
 struct Message* CreateMessage(enum MessageType messageType, struct BufferQueue * clientBuffer, int diskBlock, int id, byte* buf)
 {
     struct Message* message = (struct Message*) malloc(sizeof(struct Message));
@@ -8,5 +9,6 @@ struct Message* CreateMessage(enum MessageType messageType, struct BufferQueue *
     message->diskBlock = diskBlock;
     message->id = id;
     message->buf = buf;
+
     return message;
 }

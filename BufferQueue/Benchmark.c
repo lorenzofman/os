@@ -60,7 +60,7 @@ long long ThreadBenchmark(int bufferSize, int blockSize, int readers, int writer
 		return 0;
 	}
 	/* Create buffer queue */
-	struct BufferQueue* bufferQueue = CreateBufferThreaded(bufferSize, "Test");
+	struct BufferQueue* bufferQueue = CreateBufferThreaded(bufferSize);
 	if(bufferQueue == NULL)
 	{
 		return 0;

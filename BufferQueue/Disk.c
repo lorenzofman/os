@@ -72,7 +72,7 @@ struct Disk* CreateDiskFromFile(char *fileName)
 
 void WriteDiskToFile(struct Disk* disk, char* filename)
 {
-    if(disk->diskIdentifier == DISK_ID)
+    if(disk->diskIdentifier != DISK_ID)
     {
         return;
     }

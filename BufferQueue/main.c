@@ -69,7 +69,8 @@ char* ExecuteDisk(int argc, char *argv[])
     diskOperation.filePath = NULL;
     diskOperation.useElevator = false;
     diskOperation.randomAccess = false;
-    
+    diskOperation.seed = 42;
+
     diskOperation.cylinders = 
     diskOperation.surfaces = 
     diskOperation.sectorsPerTrack =
@@ -84,11 +85,11 @@ char* ExecuteDisk(int argc, char *argv[])
     {
         {"load", required_argument, NULL, 'l' },
         {"save", required_argument, NULL, 's' },
-        {"read", required_argument, NULL, 'r' },
-        {"write", required_argument, NULL, 'w' },        
+        {"read", no_argument, NULL, 'r' },
+        {"write", no_argument, NULL, 'w' },        
         {"create", no_argument, NULL, 'c' },
         {"elevator", no_argument, NULL, 'e' },
-        {"random", required_argument, NULL, '0' },
+        {"random", no_argument, NULL, '0' },
         {"cylinders", required_argument, NULL, '1'},
         {"surfaces", required_argument, NULL, '2'},
         {"sectorsPerTrack", required_argument, NULL, '3'},
@@ -104,7 +105,7 @@ char* ExecuteDisk(int argc, char *argv[])
     };
     int c;
     int option_index = 0;
-    while ((c = getopt_long(argc, argv, "l:s:0rwce1:2:3:4:5:6:7:8:9:!:#:@:", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "l:s:rwce01:2:3:4:5:6:7:8:9:!:#:@:", long_options, &option_index)) != -1)
     {       
         switch (c)
         {
@@ -181,7 +182,7 @@ char* ExecuteDisk(int argc, char *argv[])
                 diskOperation.seed = ExtractInt(optarg);
                 break;
             default:
-                printf("Other: %i, %s\n", c, optarg);
+                printf("Other: %c, %s\n", c, optarg);
                 break;
         }
     }
@@ -201,9 +202,9 @@ char* ExecuteDisk(int argc, char *argv[])
         int blocks = diskOperation.sectorsPerTrack * diskOperation.cylinders * diskOperation.surfaces;
         disk = CreateDisk(blocks, diskOperation.blockSize, diskOperation.cylinders, diskOperation.surfaces, diskOperation.sectorsPerTrack, diskOperation.RPM, diskOperation.overheadTime, diskOperation.transferTime,(diskOperation.seekTime * 2)/diskOperation.cylinders);
     }
-    if(diskOperation.sectorInterleaving == -1 || diskOperation.filePath == NULL)
+    if(diskOperation.sectorInterleaving == -1 || diskOperation.filePath == NULL || diskOperation.opType == UnassignedOpType)
     {
-        printf("Missing argdsauments\n");
+        printf("Missing arguments\n");
         exit(EXIT_FAILURE);
     }
    
@@ -214,7 +215,18 @@ char* ExecuteDisk(int argc, char *argv[])
     struct Client* client = CreateClient(clientBufferQueue);
 
     pthread_t scheduler = StartDiskScheduler(diskScheduler);
-    CopyFileToDisk(client, diskScheduler, diskOperation.filePath, false);
+    if(diskOperation.randomAccess == true)
+    {
+        srand(diskOperation.seed);
+    }
+    if(diskOperation.opType == ReadOpMode)
+    {
+        CopyFileToDisk(client, diskScheduler, diskOperation.filePath, !diskOperation.randomAccess);
+    }
+    else
+    {
+        CopyFileFromDisk(client, diskScheduler, diskOperation.filePath, !diskOperation.randomAccess);
+    }
     StopDiskScheduler(diskScheduler);
     if(diskOperation.saveFilePath != NULL)
     {
@@ -395,7 +407,6 @@ char* Execute(int argc, char *argv[])
         default:
             break;
     }
-    printf("%c, %i", c,c );
     return "No arguments passed to program\nYou can use --csv to generate a csv with benchmarks or --benchmark to run only one time. Also check --disk to copy files\n";
 }
 
