@@ -18,10 +18,6 @@ struct Disk
 
 struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint surfaces, uint sectorsPerTrack, uint rpm, uint searchOverheadTime, uint transferTime, uint cylinderTime);
 
-struct Disk* CreateDiskFromFile(char *fileName);
-
-void WriteDiskToFile(struct Disk* disk, char* filename);
-
 void DestroyDisk(struct Disk* disk);
 
 void Read(struct Disk* disk, int block, void* buf);

@@ -122,6 +122,13 @@ void IncrementTicket(int *ticket,  pthread_mutex_t* ticketLock, pthread_cond_t *
 
 }
 
+void DecrementTicket(int *ticket,  pthread_mutex_t* ticketLock)
+{
+	pthread_mutex_lock(ticketLock);
+	(*ticket)--;
+	pthread_mutex_unlock(ticketLock);
+}
+
 int GetMyTicket(int *ticket, pthread_mutex_t *ticketMutex)
 {
 	pthread_mutex_lock(ticketMutex);
@@ -273,7 +280,12 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 		/* Releases current ticket allowing subsequent writers/readers to start working */
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 		WaitTicketTurn(myWriteTicket, &bufferQueue->globalWriteTicket, &bufferQueue->writeTicketUpdate, &bufferQueue->writeTicketCondMutex);
-
+		while(Fits(bufferQueue, totalSize) == false)
+		{
+			DecrementTicket(&bufferQueue->writeTicket, &bufferQueue->writeTicketLock);
+			IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);			
+			WaitTicketTurn(myWriteTicket, &bufferQueue->globalWriteTicket, &bufferQueue->writeTicketUpdate, &bufferQueue->writeTicketCondMutex);
+		}
 	}
 
 	/* Writes header */
