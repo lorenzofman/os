@@ -18,7 +18,5 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 
 bool Empty(struct BufferQueue* bufferQueue);
 
-bool Full(struct BufferQueue* bufferQueue);
-
 bool Fits(struct BufferQueue* bufferQueue, int size);
 #endif

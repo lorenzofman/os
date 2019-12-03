@@ -1,8 +1,8 @@
 COMPILER=gcc
 ARGS=-std=c11 -pthread -lm -Wall -O3
-OARGS=-t
 BUFFERQUEUE=BufferQueue.out
-all: Disk BufferQueueBenchmark 
+DISK=Disk.out
+all: Disk BufferQueueBenchmark
 Disk: BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o DiskTest.c Sleep.o Message.o Client.o Elevator.o Constants.h
 	$(COMPILER) BufferQueue.o BufferQueueThread.o Elevator.o Disk.o DiskScheduler.o Sleep.o Message.o Client.o Constants.h DiskTest.c -o $(DISK) $(ARGS)
 
@@ -33,9 +33,12 @@ Message.o: Message.c
 Sleep.o: Sleep.c
 	$(COMPILER) -c Sleep.c $(ARGS)
 
+runBuffer: 
+	./$(BUFFERQUEUE)
+runBufferThreads: all
+	./$(BUFFERQUEUE) -t
+
+runDisk:
+	./$(DISK)
 clean: 
 	rm *.o
-runBuffer: 
-	./$(OUTPUT)
-runBufferThreads: main
-	./$(OUTPUT) -t

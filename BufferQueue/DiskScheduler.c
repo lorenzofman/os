@@ -93,7 +93,7 @@ void* Schedule(void* varg)
         }
         if(ProcessMessage(diskScheduler, &message) == false)
         {
-            return;
+            return NULL;
         }
     }
     return NULL;
@@ -122,5 +122,5 @@ void StopDiskScheduler(struct DiskScheduler* scheduler)
 {
     struct Message message;
     message.messageType = StopSchedulerType;
-    EnqueueThread_B(scheduler->receiver, &message, sizeof(struct Message));
+    EnqueueThread_B(scheduler->receiver, (byte*) &message, sizeof(struct Message));
 }

@@ -106,7 +106,12 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     for(int i = 0; i < blocks; i++)
     {
         byte* buf = blocksArr[i] = (byte*) malloc(blockSize);
-        fread(buf, blockSize, 1, file);
+        int res = fread(buf, blockSize, 1, file);
+        if(res == 0)
+        {
+            printf("Read error\n");
+            return;
+        }
         struct Message *message = CreateMessage(WriteMessageType, client->buffer, blocksIdxs[i], i, buf);
         EnqueueThread_B(scheduler->receiver, (byte*) message, sizeof(struct Message));
         free(message);

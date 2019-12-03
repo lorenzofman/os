@@ -255,20 +255,19 @@ bool PendingReads(struct BufferQueue* bufferQueue)
 
 int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
-	//printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, true, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
-	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
-	//printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
+	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
+	printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
 
 	bool pendingWrite = false;
 
 	/* If buffer is full, return error code (0) */
-	if(bufferQueue->capacity - bufferQueue->usedBytes < totalSize || bufferQueue->pendingWrites > 0)
+	if(Fits(bufferQueue, totalSize) == false || bufferQueue->pendingWrites > 0 )
 	{
 		int myWriteTicket = GetMyTicket(&bufferQueue->writeTicket, &bufferQueue->writeTicketLock);
-		//printfpp("Buffer is full, pending write. My write ticket: %i, global write ticket: %i\n", myTicket, bufferQueue, true, myWriteTicket, bufferQueue->globalWriteTicket);
+		printfpp("Buffer is full, pending write. My write ticket: %i, global write ticket: %i\n", myTicket, bufferQueue, true, myWriteTicket, bufferQueue->globalWriteTicket);
 		bufferQueue->pendingWrites++;
 		pendingWrite = true;
 		/* Releases current ticket allowing subsequent writers/readers to start working */
@@ -289,50 +288,45 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 
 	if(pendingWrite)
 	{
-		//printfpp("Pending write released\n", myTicket, bufferQueue, true);
+		printfpp("Pending write released\n", myTicket, bufferQueue, true);
 		bufferQueue->pendingWrites--;
 	}
 
-	//printfpp("Writing completed\n", myTicket, bufferQueue, true);
-	//printfpp("%i Pending reads; %i Pending writes\n", myTicket, bufferQueue, true,  bufferQueue->pendingReads, bufferQueue->pendingWrites);
+	printfpp("Writing completed\n", myTicket, bufferQueue, true);
+	printfpp("%i Pending reads; %i Pending writes\n", myTicket, bufferQueue, true,  bufferQueue->pendingReads, bufferQueue->pendingWrites);
 
 	if(PendingReads(bufferQueue))
 	{
-		//printfpp("Trigger pending read, read global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalReadTicket);
-	}
-	else if(PendingWrites(bufferQueue))
-	{
-		//printfpp("Trigger pending write, write global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalWriteTicket);
+		printfpp("Trigger pending read, read global ticket is now: %i\n", myTicket, bufferQueue, true,  bufferQueue->globalReadTicket);
 	}
 	else
 	{
-		//printfpp("Incrementing global ticket\n", myTicket, bufferQueue, true);
+		printfpp("Incrementing global ticket\n", myTicket, bufferQueue, true);
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 	}
 
-	//printfpp("Success\n", myTicket, bufferQueue, true);
+	printfpp("Success\n", myTicket, bufferQueue, true);
 	
 	return 1;
 }
 
 int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
-	//printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, false, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
-	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket,&bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
-	//printfpp("Acquiring ticket; Global: %i\n", myTicket, bufferQueue, false, bufferQueue->globalTicket);
+	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket,&bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
+	printfpp("Acquired ticket\n", myTicket, bufferQueue, false);
 	bool pendingRead = false;
-	if (bufferQueue->usedBytes == 0)
+	if (Empty(bufferQueue) ||  bufferQueue->pendingReads > 0) 
 	{
-		//printfpp("Buffer is empty, pendind read\n", myTicket, bufferQueue, false);
+		printfpp("Buffer is empty, pendind read\n", myTicket, bufferQueue, false);
 		int myReadTicket = GetMyTicket(&bufferQueue->readTicket, &bufferQueue->readTicketLock);
-		//printfpp("My read ticket is %i, global: %i\n", myTicket, bufferQueue, false, myReadTicket, bufferQueue->globalReadTicket);
+		printfpp("My read ticket is %i, global: %i\n", myTicket, bufferQueue, false, myReadTicket, bufferQueue->globalReadTicket);
 		bufferQueue->pendingReads++;
 		pendingRead = true;
 		/* Releases current ticket allowing subsequent writers/readers to start working */
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 		WaitTicketTurn(myReadTicket, &bufferQueue->globalReadTicket, &bufferQueue->readTicketUpdate, &bufferQueue->readTicketCondMutex);
-		//printfpp("Some data has been added to buffer\n", myTicket, bufferQueue, false);
+		printfpp("Some data has been added to buffer\n", myTicket, bufferQueue, false);
 	}
 
 	/* Reads the header */
@@ -344,8 +338,9 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	/* If given buffer doesn't contain enough space */
 	if (bytesCount > bufferSize)
 	{
-		//printfpp("Bytescount: %i, buffersize: %i\n", myTicket, bufferQueue, false, bytesCount, bufferSize);
-		//printfpp("Fatal\n", myTicket, bufferQueue, false);
+		printfpp("Bytescount: %i, buffersize: %i\n", myTicket, bufferQueue, false, bytesCount, bufferSize);
+		printfpp("Fatal\n", myTicket, bufferQueue, false);
+		exit(-1);
 		PendingWrites(bufferQueue);
 		/* Increment ticket for next readers/writers be able to start */
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
@@ -360,41 +355,32 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 
 	/* Read data from bufferQueue into buffer */
 	ReadData(bufferQueue, buffer, bytesCount);
-	//printfpp("Reading completed\n", myTicket, bufferQueue, true);
-	//printfpp("%i Pending reads; %i Pending writes\n", myTicket, bufferQueue, false, bufferQueue->pendingReads, bufferQueue->pendingWrites);
+	printfpp("Reading completed\n", myTicket, bufferQueue, false);
 	if (pendingRead)
 	{
-		//printfpp("Pending read released\n", myTicket, bufferQueue, false);
+		printfpp("Pending read released\n", myTicket, bufferQueue, false);
 		bufferQueue->pendingReads--;
 	}
+	printfpp("%i Pending reads; %i Pending writes\n", myTicket, bufferQueue, false, bufferQueue->pendingReads, bufferQueue->pendingWrites);
 
 	if (PendingWrites(bufferQueue))
 	{
-		//printfpp("Trigger pending write, write global ticket is now: %i\n", myTicket, bufferQueue, false,  bufferQueue->globalWriteTicket);
-	}
-	else if (PendingReads(bufferQueue))
-	{
-		//printfpp("Trigger pending read, read global ticket is now: %i\n", myTicket, bufferQueue, false,  bufferQueue->globalReadTicket);
+		printfpp("Trigger pending write, write global ticket is now: %i\n", myTicket, bufferQueue, false,  bufferQueue->globalWriteTicket);
 	}
 	else
 	{
-		//printfpp("Incrementing global ticket\n", myTicket, bufferQueue, false);
+		printfpp("Incrementing global ticket\n", myTicket, bufferQueue, false);
 		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 	}
 	
 	
-	//printfpp("Success\n", myTicket, bufferQueue, false);
+	printfpp("Success\n", myTicket, bufferQueue, false);
     return bytesCount;
 }
 
 bool Empty(struct BufferQueue* bufferQueue)
 {
     return bufferQueue->usedBytes == 0;
-}
-
-bool Full(struct BufferQueue* bufferQueue)
-{
-    return bufferQueue->usedBytes == bufferQueue->capacity;
 }
 
 bool Fits(struct BufferQueue* bufferQueue, int size)
