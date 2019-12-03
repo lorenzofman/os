@@ -1,14 +1,13 @@
 COMPILER=gcc
-ARGS=-std=c11 -pthread -lm -Wall
+ARGS=-std=c11 -pthread -lm -Wall -O3
 OARGS=-t
-OUTPUT=Program.out
-ITERATIONS=424242
-all: main run
-#main: BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o DiskTest.c Sleep.o Message.o Client.o Elevator.o Constants.h
-#	$(COMPILER) BufferQueue.o BufferQueueThread.o Elevator.o Disk.o DiskScheduler.o Sleep.o Message.o Client.o Constants.h DiskTest.c -o $(OUTPUT) $(ARGS)
+BUFFERQUEUE=BufferQueue.out
+all: Disk BufferQueueBenchmark 
+Disk: BufferQueue.o BufferQueueThread.o Disk.o DiskScheduler.o DiskTest.c Sleep.o Message.o Client.o Elevator.o Constants.h
+	$(COMPILER) BufferQueue.o BufferQueueThread.o Elevator.o Disk.o DiskScheduler.o Sleep.o Message.o Client.o Constants.h DiskTest.c -o $(DISK) $(ARGS)
 
-main: BufferQueueThread.o BufferQueue.o Sleep.o Benchmark.c 
-	$(COMPILER) BufferQueueThread.o BufferQueue.o Sleep.o Benchmark.c -o $(OUTPUT) $(ARGS)
+BufferQueueBenchmark: BufferQueueThread.o BufferQueue.o Sleep.o Benchmark.c 
+	$(COMPILER) BufferQueueThread.o BufferQueue.o Sleep.o Benchmark.c -o $(BUFFERQUEUE) $(ARGS)
 
 DiskScheduler.o: DiskScheduler.c
 	$(COMPILER) -c DiskScheduler.c $(ARGS)
@@ -36,11 +35,7 @@ Sleep.o: Sleep.c
 
 clean: 
 	rm *.o
-run: 
+runBuffer: 
 	./$(OUTPUT)
-threads: main
-	./$(OUTPUT) ${OARGS}
-benchmark: main 
-	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT); done"
-benchmarkThreads: main 
-	bash -c "for i in {1..${ITERATIONS}}; do ./$(OUTPUT) ${OARGS}; done"
+runBufferThreads: main
+	./$(OUTPUT) -t

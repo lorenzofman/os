@@ -46,6 +46,15 @@ struct BufferQueue* CreateBufferThreaded(int size, char* name)
 	pthread_mutex_init(&bufferQueue->writeTicketLock, NULL);
 	pthread_mutex_init(&bufferQueue->globalWriteTicketLock, NULL);
 
+	pthread_mutex_init(&bufferQueue->ticketCondMutex, NULL);
+	pthread_mutex_init(&bufferQueue->readTicketCondMutex, NULL);
+	pthread_mutex_init(&bufferQueue->writeTicketCondMutex, NULL);
+
+	pthread_cond_init(&bufferQueue->ticketUpdate, NULL);
+	pthread_cond_init(&bufferQueue->writeTicketUpdate, NULL);
+	pthread_cond_init(&bufferQueue->readTicketUpdate, NULL);
+
+
 	bufferQueue->pendingWrites = bufferQueue->pendingReads = 0;
 	
 	return bufferQueue;
@@ -61,6 +70,14 @@ void DestroyBufferQueueThreaded(struct BufferQueue* bufferQueue)
 
 	pthread_mutex_destroy(&bufferQueue->writeTicketLock);
 	pthread_mutex_destroy(&bufferQueue->globalWriteTicketLock);
+
+	pthread_cond_destroy(&bufferQueue->ticketUpdate);
+	pthread_cond_destroy(&bufferQueue->writeTicketUpdate);
+	pthread_cond_destroy(&bufferQueue->readTicketUpdate);
+
+	pthread_mutex_destroy(&bufferQueue->ticketCondMutex);
+	pthread_mutex_destroy(&bufferQueue->writeTicketCondMutex);
+	pthread_mutex_destroy(&bufferQueue->readTicketCondMutex);
 
 	DestroyBuffer(bufferQueue);
 }
@@ -93,11 +110,16 @@ int printfpp(char* format, int idx, struct BufferQueue* queue, bool enqueue , ..
 
 }
 
-void IncrementTicket(int *ticket,  pthread_mutex_t* ticketLock)
+void IncrementTicket(int *ticket,  pthread_mutex_t* ticketLock, pthread_cond_t * ticketCond, pthread_mutex_t * ticketCondLock)
 {
 	pthread_mutex_lock(ticketLock);
 	(*ticket)++;
 	pthread_mutex_unlock(ticketLock);
+
+	pthread_mutex_lock(ticketCondLock);
+	pthread_cond_broadcast(ticketCond);
+	pthread_mutex_unlock(ticketCondLock);
+
 }
 
 int GetMyTicket(int *ticket, pthread_mutex_t *ticketMutex)
@@ -109,25 +131,24 @@ int GetMyTicket(int *ticket, pthread_mutex_t *ticketMutex)
 	return myTicket;
 }
 
-void WaitTicketTurn(int ticket, int* globalTicket)
+void WaitTicketTurn(int ticket, int* globalTicket, pthread_cond_t * ticketCond, pthread_mutex_t  * ticketCondLock)
 {
+	pthread_mutex_lock(ticketCondLock);
 	while (true)
 	{
 		if(ticket == *globalTicket)
 		{
+			pthread_mutex_unlock(ticketCondLock);
 			return;
 		}
-		else
-		{
-			Sleep(WAIT_TIME);
-		}
+		pthread_cond_wait(ticketCond, ticketCondLock);		
 	}
 }
 
-int AcquireTicket(int *ticket, pthread_mutex_t * ticketMutex, int * globalTicket)
+int AcquireTicket(int *ticket, pthread_mutex_t * ticketMutex, int * globalTicket, pthread_cond_t * ticketCond, pthread_mutex_t * ticketCondMutex)
 {
 	int myTicket = GetMyTicket(ticket, ticketMutex);
-	WaitTicketTurn(myTicket, globalTicket);
+	WaitTicketTurn(myTicket, globalTicket, ticketCond, ticketCondMutex);
 	return myTicket;
 }
 
@@ -141,7 +162,7 @@ void UpdateUsedSize(struct BufferQueue* bufferQueue, int amount)
 int EnqueueThread_NB(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
 	/* Acquire ticket and wait for it's turn */
-	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
 
@@ -149,7 +170,7 @@ int EnqueueThread_NB(struct BufferQueue* bufferQueue, byte* data, int dataLength
 	if(bufferQueue->capacity - bufferQueue->usedBytes < totalSize)
 	{
 		/* Releases current ticket allowing subsequent writers/readers to start working */
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 		return 0;
 	}
 
@@ -163,7 +184,7 @@ int EnqueueThread_NB(struct BufferQueue* bufferQueue, byte* data, int dataLength
 	UpdateUsedSize(bufferQueue, totalSize);
 
 	/* Releases current ticket allowing subsequent writers/readers to start working */
-	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	
 	return 1;
 }
@@ -171,11 +192,11 @@ int EnqueueThread_NB(struct BufferQueue* bufferQueue, byte* data, int dataLength
 int DequeueThread_NB(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
 	/* Acquire ticket and wait for it's turn */
-	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	if (bufferQueue->usedBytes == 0)
 	{
 		/* Increment ticket for next readers/writers be able to start */
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 		return 0;
 	}
 
@@ -189,7 +210,7 @@ int DequeueThread_NB(struct BufferQueue* bufferQueue, void* buffer, int bufferSi
 	if (bytesCount > bufferSize)
 	{
 		/* Increment ticket for next readers/writers be able to start */
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 		return 0;
 	}
 
@@ -203,7 +224,7 @@ int DequeueThread_NB(struct BufferQueue* bufferQueue, void* buffer, int bufferSi
 	ReadData(bufferQueue, buffer, bytesCount);
 	
 	/* Increment ticket for next readers/writers be able to start */
-	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+	IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 
     return bytesCount;
 }
@@ -216,7 +237,7 @@ bool PendingWrites(struct BufferQueue* bufferQueue)
 {
 	if(bufferQueue->pendingWrites > 0)
 	{
-		IncrementTicket(&bufferQueue->globalWriteTicket, &bufferQueue->globalWriteTicketLock);
+		IncrementTicket(&bufferQueue->globalWriteTicket, &bufferQueue->globalWriteTicketLock, &bufferQueue->writeTicketUpdate, &bufferQueue->writeTicketCondMutex);
 		return true;
 	}
 	return false;
@@ -226,7 +247,7 @@ bool PendingReads(struct BufferQueue* bufferQueue)
 {
 	if(bufferQueue->pendingReads > 0)
 	{
-		IncrementTicket(&bufferQueue->globalReadTicket, &bufferQueue->globalReadTicketLock);
+		IncrementTicket(&bufferQueue->globalReadTicket, &bufferQueue->globalReadTicketLock, &bufferQueue->readTicketUpdate, &bufferQueue->readTicketCondMutex);
 		return true;
 	}
 	return false;
@@ -236,7 +257,7 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
 	//printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, true, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
-	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	//printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
@@ -251,9 +272,8 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 		bufferQueue->pendingWrites++;
 		pendingWrite = true;
 		/* Releases current ticket allowing subsequent writers/readers to start working */
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
-		
-		WaitTicketTurn(myWriteTicket, &bufferQueue->globalWriteTicket);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
+		WaitTicketTurn(myWriteTicket, &bufferQueue->globalWriteTicket, &bufferQueue->writeTicketUpdate, &bufferQueue->writeTicketCondMutex);
 
 	}
 
@@ -287,7 +307,7 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 	else
 	{
 		//printfpp("Incrementing global ticket\n", myTicket, bufferQueue, true);
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 	}
 
 	//printfpp("Success\n", myTicket, bufferQueue, true);
@@ -297,8 +317,9 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 
 int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
+	//printfpp("Acquiring ticket; Global: %i\n", bufferQueue->ticket, bufferQueue, false, bufferQueue->globalTicket);
 	/* Acquire ticket and wait for it's turn */
-	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket,&bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	//printfpp("Acquiring ticket; Global: %i\n", myTicket, bufferQueue, false, bufferQueue->globalTicket);
 	bool pendingRead = false;
 	if (bufferQueue->usedBytes == 0)
@@ -309,8 +330,8 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 		bufferQueue->pendingReads++;
 		pendingRead = true;
 		/* Releases current ticket allowing subsequent writers/readers to start working */
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
-		WaitTicketTurn(myReadTicket, &bufferQueue->globalReadTicket);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
+		WaitTicketTurn(myReadTicket, &bufferQueue->globalReadTicket, &bufferQueue->readTicketUpdate, &bufferQueue->readTicketCondMutex);
 		//printfpp("Some data has been added to buffer\n", myTicket, bufferQueue, false);
 	}
 
@@ -327,7 +348,7 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 		//printfpp("Fatal\n", myTicket, bufferQueue, false);
 		PendingWrites(bufferQueue);
 		/* Increment ticket for next readers/writers be able to start */
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 		return 0;
 	}
 
@@ -358,7 +379,7 @@ int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSiz
 	else
 	{
 		//printfpp("Incrementing global ticket\n", myTicket, bufferQueue, false);
-		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock);
+		IncrementTicket(&bufferQueue->globalTicket, &bufferQueue->globalTicketLock, &bufferQueue->ticketUpdate,&bufferQueue->ticketCondMutex);
 	}
 	
 	

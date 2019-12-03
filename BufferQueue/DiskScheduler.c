@@ -58,19 +58,22 @@ void ProcessWriteRequest(struct DiskScheduler * scheduler, struct Message* messa
     EnqueueThread_B(message->clientBuffer, (byte*) message, sizeof(struct Message));
 }
 
-void ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
+/* Returns false in case the scheduler should stop */
+bool ProcessMessage(struct DiskScheduler* scheduler, struct Message* message)
 {
     switch (message->messageType)
     {
         case ReadMessageType:
             ProcessReadRequest(scheduler, message);
-            break;
+            return true;
         case WriteMessageType:
             ProcessWriteRequest(scheduler, message);
-            break;
+            return true;
+        case StopSchedulerType:
+            return false;
         default: 
             printf("Invalid message type\n");
-            return;
+            return true;
     }
 }
 
@@ -79,11 +82,6 @@ void* Schedule(void* varg)
     struct DiskScheduler* diskScheduler = (struct DiskScheduler*) varg;
     while(diskScheduler->keepScheduling)
     {
-        if(Empty(diskScheduler->receiver) && diskScheduler->elevator->pendingMessages == 0)
-        {
-            Sleep(100000);
-            continue;
-        }
         struct Message message;
         if(diskScheduler->useElevator)
         {
@@ -93,7 +91,10 @@ void* Schedule(void* varg)
         {
             DequeueThread_B(diskScheduler->receiver, &message, sizeof(struct Message));
         }
-        ProcessMessage(diskScheduler, &message);
+        if(ProcessMessage(diskScheduler, &message) == false)
+        {
+            return;
+        }
     }
     return NULL;
 }
@@ -119,5 +120,7 @@ void DestroyDiskScheduler(struct DiskScheduler* diskScheduler)
 
 void StopDiskScheduler(struct DiskScheduler* scheduler)
 {
-    scheduler->keepScheduling = false;
+    struct Message message;
+    message.messageType = StopSchedulerType;
+    EnqueueThread_B(scheduler->receiver, &message, sizeof(struct Message));
 }

@@ -6,7 +6,8 @@
 enum MessageType
 {
     ReadMessageType,
-    WriteMessageType
+    WriteMessageType,
+    StopSchedulerType
 };
 
 struct Message

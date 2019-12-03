@@ -30,6 +30,15 @@ struct BufferQueue
 	int pendingWrites;
 
 	char name[100]; 
+
+	pthread_cond_t ticketUpdate;
+	pthread_cond_t writeTicketUpdate;
+	pthread_cond_t readTicketUpdate;
+
+	pthread_mutex_t ticketCondMutex;
+	pthread_mutex_t writeTicketCondMutex;
+	pthread_mutex_t readTicketCondMutex;
+
 };
 
 byte* IncrementedPointer(struct BufferQueue* queue, byte* pointer, int amount);

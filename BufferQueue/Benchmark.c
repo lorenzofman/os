@@ -7,15 +7,14 @@
 #include <string.h>
 #define READERS 1
 #define WRITERS 1
-#define BUFFERSIZE 1024 * 1024 * 256
-#define BLOCKSIZE (1024 * 1024 - 4)
-#define THREADS
 
 struct QueueParameter
 {
 	struct BufferQueue* bufferQueue;
 	int idx;
 	byte * data;
+	int bufferSize;
+	int blockSize;
 };
 
 char* SizeString(long long i, char* buffer) 
@@ -47,44 +46,47 @@ char* SizeString(long long i, char* buffer)
 void *EnqueueData(void* varg)
 {
 	struct QueueParameter* queueParameter = (struct QueueParameter*) varg;
-	int blocks = BUFFERSIZE / (BLOCKSIZE + sizeof(int));
+	int blocks = queueParameter->bufferSize / (queueParameter->blockSize + sizeof(int));
 	int blocksPerWriter = blocks/WRITERS;
 	for(int j = 0; j < blocksPerWriter; j++)
 	{
-		EnqueueThread_B(queueParameter->bufferQueue, queueParameter->data, rand()%BLOCKSIZE);
+		EnqueueThread_B(queueParameter->bufferQueue, queueParameter->data, queueParameter->blockSize);
 	}
 	return NULL;
 }
 void *DequeueData(void* varg)
 {
 	struct QueueParameter* queueParameter = (struct QueueParameter*) varg;
-	int blocks = BUFFERSIZE / (BLOCKSIZE + sizeof(int));
+	int blocks = queueParameter->bufferSize / (queueParameter->blockSize + sizeof(int));
 	int blocksPerReader = blocks/READERS;
 	for(int j = 0; j < blocksPerReader; j++)
 	{
-		DequeueThread_B(queueParameter->bufferQueue, queueParameter->data, BLOCKSIZE);
+		DequeueThread_B(queueParameter->bufferQueue, queueParameter->data, queueParameter->blockSize);
 	}
 	return NULL;
 }
 
-int ThreadBenchmark()
+long long ThreadBenchmark(int bufferSize, int blockSize)
 {
-	struct BufferQueue* bufferQueue = CreateBufferThreaded(BUFFERSIZE, "Test");
+	struct BufferQueue* bufferQueue = CreateBufferThreaded(bufferSize, "Test");
 	pthread_t* readers = (pthread_t*)malloc(sizeof(pthread_t) * READERS);
 	if (readers == NULL)
 	{
+		printf("Error\n");
 		return 0;
 	}
 	pthread_t* writers = (pthread_t*)malloc(sizeof(pthread_t) * WRITERS);
 	
 	if (writers == NULL)
 	{
+		printf("Error\n");
 		return 0;
 	}
 
 	struct QueueParameter** queueParameters = (struct QueueParameter**)malloc(sizeof(struct QueueParameter) * (READERS + WRITERS));
 	if (queueParameters == NULL) 
 	{
+		printf("Error\n");
 		return 0;
 	}
 	for(int i = 0; i < READERS; i++)
@@ -92,11 +94,15 @@ int ThreadBenchmark()
 		queueParameters[i] = (struct QueueParameter*) malloc(sizeof(struct QueueParameter));
 		if (queueParameters[i] == NULL)
 		{
+			printf("Error\n");
 			return 0;
 		}
-		queueParameters[i]->data = (byte*)malloc(BLOCKSIZE);
+		queueParameters[i]->data = (byte*)malloc(blockSize);
 		queueParameters[i]->bufferQueue = bufferQueue;
 		queueParameters[i]->idx = i;
+		queueParameters[i]->bufferSize = bufferSize;
+		queueParameters[i]->blockSize = blockSize;
+
 	}
 
 	for(int i = 0; i < WRITERS; i++)
@@ -104,21 +110,26 @@ int ThreadBenchmark()
 		queueParameters[READERS + i] = (struct QueueParameter*) malloc(sizeof(struct QueueParameter));
 		if (queueParameters[READERS + i] == NULL)
 		{
+			printf("Error\n");
 			return 0;
 		}
-		queueParameters[READERS + i]->data = (byte*)malloc(BLOCKSIZE);
+		queueParameters[READERS + i]->data = (byte*)malloc(blockSize);
 		if (queueParameters[READERS + i]->data == NULL)
 		{
+			printf("Error\n");			
 			return 0;
 		}
-		for(int j = 0; j < BLOCKSIZE; j++)
+		for(int j = 0; j < blockSize; j++)
 		{
 			queueParameters[READERS + i]->data[j] = 'x';
 		}
 		queueParameters[READERS + i]->bufferQueue = bufferQueue;
 		queueParameters[READERS + i]->idx = i;
+		queueParameters[READERS + i]->bufferSize = bufferSize;
+		queueParameters[READERS + i]->blockSize = blockSize;
 	}
-	clock_t start = clock();
+
+    clock_t start = clock();
 	
 	for(int i = 0; i < READERS; i++)
 	{
@@ -140,17 +151,11 @@ int ThreadBenchmark()
 		pthread_join(writers[i], NULL);
 	}
 
-
 	clock_t end = clock();
-	char* buffer = malloc(10 * sizeof(char));
-	double elapsedTime = (double)(end - start) / CLOCKS_PER_SEC;
-	double result = (double)BUFFERSIZE / elapsedTime;
+	double elapsedTime = (double) (end - start)/ CLOCKS_PER_SEC;
+	double result = (double)bufferSize * 2 / elapsedTime;
 	long long throughput = (long long) (result);
-	printf("Time: %lf ms\n", elapsedTime * 1000);
-	printf("Payload: %s\n", SizeString(BUFFERSIZE, buffer));
-	printf("Velocity = %s/s\n", SizeString(throughput, buffer));
 	DestroyBuffer(bufferQueue);
-	free(buffer);
 	for(int i = 0; i < (READERS + WRITERS); i++)
 	{
 		free(queueParameters[i]->data);
@@ -159,10 +164,10 @@ int ThreadBenchmark()
 	free(readers);
 	free(writers);
 	free(queueParameters);
-	return 0;
+	return throughput;
 }
 
-int Benchmark(int bufferSize, int blocksize)
+long long Benchmark(int bufferSize, int blocksize)
 {
 	struct BufferQueue* queue = CreateBuffer(bufferSize);
 	int blocks = bufferSize / blocksize;
@@ -191,15 +196,10 @@ int Benchmark(int bufferSize, int blocksize)
 
 	double result = (double) 2 * bufferSize / elapsedTime;
 	long long throughput = (long long) (result);
-	//printf("Time: %lf ms\n", elapsedTime * 1000);
-	//printf("Blocksize: %s;", SizeString(blocksize, buffer));
-	// printf("Payload: %s;", SizeString(bufferSize, buffer));
-	// printf("Velocity:%s/s\n", SizeString(throughput, buffer));
-	printf("%i;%i;%lld\n", bufferSize, blocksize + 4, throughput);
 	DestroyBuffer(queue);
 	free(data);
 	free(buffer);
-	return 0;
+	return throughput;
 }
 
 int main(int argc, char *argv[])
@@ -220,17 +220,26 @@ int main(int argc, char *argv[])
 				if(strcmp(argv[i], "-t") == 0)
 				{
 					printf("Threaded Benchmark\n");
-					return ThreadBenchmark();
+					printf("Buffer Size; Block Size; Velocity\n");
+					for(long long i = 1024 * 64; i <= 1024 * 1024 * 1024; i*=2)
+					{
+						for(long long j = 8; j <= i; j *= 2)
+						{
+							long long velocity = ThreadBenchmark(i, j - 4);
+							printf("%lli; %lli; %lli\n", i, j, velocity);
+						}
+					}
 				}
 			}
 		}
 		printf("Non-threaded Benchmark\n");
 		printf("Buffer Size; Block Size; Velocity\n");
-		for(long long i = 1024 * 64; i <= 1024 * 1024 * 4; i*=2)
+		for(long long i = 1024 * 64; i <= 1024 * 1024 * 1024; i*=2)
 		{
-			for(long long j = 1024 * 64; j <= i; j *= 2)
+			for(long long j = 8; j <= i; j *= 2)
 			{
-				Benchmark(i, j - 4);
+				long long velocity = Benchmark(i, j - 4);
+				printf("%lli; %lli; %lli\n", i, j, velocity);
 			}
 		}
 	#endif
