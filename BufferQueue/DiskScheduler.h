@@ -2,6 +2,7 @@
 #define DISK_SCHEDULER
 #include <stdbool.h>
 #include <pthread.h>
+
 struct DiskScheduler
 {
     struct Disk * disk;

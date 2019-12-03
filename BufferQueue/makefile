@@ -2,10 +2,10 @@ COMPILER=gcc
 ARGS=-std=c11 -pthread -lm -Wall -O3
 OUT=t1.out
 
-all: Disk BufferQueueBenchmark
+all: main
 
-main: Benchmark.o BufferQueue.o BufferQueueThread.o Client.o Disk.o DiskScheduler.o Elevator.o Message.o Sleep.o Utils.o main.c
-	$(COMPILER) Benchmark.o BufferQueue.o BufferQueueThread.o Client.o Disk.o DiskScheduler.o Elevator.o Message.o Sleep.o Utils.o main.c -o $(OUT) $(ARGS)
+main: Benchmark.o BufferQueue.o BufferQueueThread.o Client.o CSVGen.o Disk.o DiskScheduler.o Elevator.o Message.o Sleep.o Utils.o main.c
+	$(COMPILER) Benchmark.o BufferQueue.o BufferQueueThread.o Client.o CSVGen.o Disk.o DiskScheduler.o Elevator.o Message.o Sleep.o Utils.o main.c -o $(OUT) $(ARGS)
 
 Benchmark.o: Benchmark.c
 	$(COMPILER) -c Benchmark.c $(ARGS)
@@ -18,6 +18,9 @@ BufferQueueThread.o: BufferQueueThread.c
 
 Client.o: Client.c
 	$(COMPILER) -c Client.c $(ARGS)
+
+CSVGen.o: CSVGen.c
+	$(COMPILER) -c CSVGen.c $(ARGS)
 
 Disk.o: Disk.c
 	$(COMPILER) -c Disk.c $(ARGS)
@@ -36,5 +39,6 @@ Sleep.o: Sleep.c
 
 Utils.o: Utils.c
 	$(COMPILER) -c Utils.c $(ARGS)
+
 clean: 
 	rm *.o

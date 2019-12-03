@@ -1,6 +1,6 @@
 #include "Utils.h"
 #include <stdlib.h>
-
+#include <stdio.h>
 char* FormattedBytes(long long i, char* buffer)
 {
 	if (buffer == NULL)

@@ -68,7 +68,7 @@ char* Execute(int argc, char *argv[])
 {
     if(argc == 0)
     {
-        return "No arguments passed to program\n";
+        return "No arguments passed to program\nYou can use -csv to generate a csv with benchmarks or -benchmark to run only one time. Also check -disk to copy files\n";
     }
 
     char* firstArg = argv[0];
@@ -82,10 +82,14 @@ char* Execute(int argc, char *argv[])
     {
         return ExecuteBenchmark(argc - 1, argv + 1);
     }
+    return "Invalid arguments\n";
 }
 
 int main(int argc, char *argv[])
 {
-    char* returnedMessage = Execute(argc, argv);
-    printf(returnedMessage);
+    /* First argument is the program name itself */
+    char* returnedMessage = Execute(argc - 1, argv + 1);
+
+    printf("%s", returnedMessage);
+    return 0;
 }

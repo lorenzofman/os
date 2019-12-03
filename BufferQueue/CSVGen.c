@@ -1,8 +1,9 @@
 #include "CSVGen.h"
 #include "Benchmark.h"
+#include <stdio.h>
 void CSVThreaded(int minBufferSize, int maxBufferSize, int minBlockSize)
 {
-	printf("BufferSize; BlockSize; Velocity\n");
+	printf("%s", "BufferSize; BlockSize; Velocity\n");
     for(long long i = minBufferSize; i <= maxBufferSize; i*=2)
     {
         for(long long j = minBlockSize; j <= i; j *= 2)
@@ -15,7 +16,7 @@ void CSVThreaded(int minBufferSize, int maxBufferSize, int minBlockSize)
 
 void CSVNonThreaded(int minBufferSize, int maxBufferSize, int minBlockSize)
 {
-	printf("BufferSize; BlockSize; Velocity\n");
+	printf("%s", "BufferSize; BlockSize; Velocity\n");
     for(long long i = minBufferSize; i <= maxBufferSize; i*=2)
     {
         for(long long j = minBlockSize; j <= i; j *= 2)
