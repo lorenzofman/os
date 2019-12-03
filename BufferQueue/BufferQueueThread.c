@@ -13,14 +13,13 @@
 
 int headerSize = sizeof(int);
 
-struct BufferQueue* CreateBufferThreaded(int size, char* name)
+struct BufferQueue* CreateBufferThreaded(int size)
 {
 	struct BufferQueue* bufferQueue = (struct BufferQueue*)malloc(sizeof(struct BufferQueue));
 	if (bufferQueue == NULL)
 	{
 		return NULL;
 	}
-	memcpy(bufferQueue->name, name, strlen(name));
 	bufferQueue->buffer = (byte*)malloc(size * sizeof(byte));
 	if (bufferQueue->buffer == NULL)
 	{
@@ -268,7 +267,8 @@ bool PendingReads(struct BufferQueue* bufferQueue)
 int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 {
 	/* Acquire ticket and wait for it's turn */
-	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
+	//int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);	
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket, &bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	//printfpp("Inserting %i bytes\n", myTicket, bufferQueue, true, dataLength);
 	/* Calculate totalSize of the buffer that will be used to store header + data */
 	int totalSize = dataLength + headerSize;
@@ -330,7 +330,8 @@ int EnqueueThread_B(struct BufferQueue* bufferQueue, byte* data, int dataLength)
 int DequeueThread_B(struct BufferQueue* bufferQueue, void* buffer, int bufferSize)
 {
 	/* Acquire ticket and wait for it's turn */
-	int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket,&bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
+	AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket,&bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
+	//int myTicket = AcquireTicket(&bufferQueue->ticket, &bufferQueue->ticketLock, &bufferQueue->globalTicket,&bufferQueue->ticketUpdate, &bufferQueue->ticketCondMutex);
 	//printfpp("Acquired ticket\n", myTicket, bufferQueue, false);
 	bool pendingRead = false;
 	if (Empty(bufferQueue) ||  bufferQueue->pendingReads > 0) 

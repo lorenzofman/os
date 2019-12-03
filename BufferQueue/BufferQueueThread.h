@@ -4,7 +4,7 @@
 #include "BufferQueue.h"
 #include <stdbool.h>
 
-struct BufferQueue* CreateBufferThreaded(int size, char * name);
+struct BufferQueue* CreateBufferThreaded(int size);
 
 void DestroyBufferQueueThreaded(struct BufferQueue* bufferQueue);
 

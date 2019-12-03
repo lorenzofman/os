@@ -20,6 +20,10 @@ struct Disk* CreateDisk(uint blocks, uint blockSize, uint cylinders, uint surfac
 
 void DestroyDisk(struct Disk* disk);
 
+struct Disk* CreateDiskFromFile(char *fileName);
+
+void WriteDiskToFile(struct Disk* disk, char* filename);
+
 void Read(struct Disk* disk, int block, void* buf);
 
 void Write(struct Disk* disk, int block, void *buf);

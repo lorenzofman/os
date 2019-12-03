@@ -26,8 +26,6 @@ struct BufferQueue
 	int pendingReads;
 	int pendingWrites;
 
-	char name[100]; 
-
 	pthread_cond_t ticketUpdate;
 	pthread_cond_t writeTicketUpdate;
 	pthread_cond_t readTicketUpdate;

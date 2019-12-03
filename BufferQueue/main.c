@@ -8,71 +8,269 @@
 #include "DiskScheduler.h"
 #include "Client.h"
 #include "Utils.h"
-/* Disk hardware */
-#define CYLINDERS 32
-#define SURFACES 4
-#define SECTORS_PER_TRACK 16
-#define BLOCKSIZE 4096
-
-/* Disk metrics */
-#define RPM 7200 /* Rotations per minute*/
-#define SEARCH_OVERHEAD_TIME 100 /* microseconds  */
-#define TRANSFER_TIME 600 /* microseconds */
-
-/* 
-    According to wikipedia: The fastest high-end server drives today have a seek time around 4 ms. 
-    Some mobile devices have 15 ms drives, with the most common mobile drives at about 12 ms and the most common desktop drives typically being around 9 ms.
-    The average seek time is strictly the time to do all possible seeks divided by the number of all possible seeks
-    The mean cylinder offset is going to be Cylinders/2
-*/
-#define AVERAGE_SEEK_TIME 10000 // 10 ms
-#define CYLINDER_TIME (2 * AVERAGE_SEEK_TIME / CYLINDERS)
-    
+#include "Types.h"
+#include <stdarg.h>
+#include <errno.h>
+#include <limits.h>
+#include <getopt.h>
 /* Optimization parameters */
-#define SECTOR_INTERLEAVING 2
 #define MESSAGES_WINDOW_SIZE 2048 /* One message uses only 32 bytes */
 #define ELEVATOR_MESSAGES_WINDOW_SIZE 96 /* Elevator will look 96 requests before choosing the best one */
-
 
 /* Convert string to integer (using base 10)*/
 int ExtractInt(char* str)
 {
-    return(strtol(str, NULL, 10));
+    char *endptr = NULL;
+    long number = strtol(str, &endptr, 10);
+    if (str == endptr ||
+        (errno == ERANGE && number == LONG_MIN) ||
+        (errno == ERANGE && number == LONG_MAX) ||
+        errno == EINVAL ||
+        (errno != 0 && number == 0))
+    {
+        printf("Error parsing input: \"%s\"\n", str);
+        exit(EXIT_FAILURE);
+    }
+    return number;
 }
+
+enum DiskMode {UnassignedDiskMode, CreateDiskMode, LoadDiskMode};
+enum OPType {UnassignedOpType, ReadOpMode, WriteOpMode};
+struct DiskOperation
+{
+    enum DiskMode diskMode;
+    enum OPType opType;
+    char* readFilePath;
+    char* saveFilePath;
+    char* filePath;
+    bool useElevator;
+    bool randomAccess;
+
+    int cylinders;
+    int surfaces;
+    int sectorsPerTrack;
+    int blockSize;
+    int RPM;
+    int overheadTime;
+    int transferTime;
+    int seekTime;
+    int sectorInterleaving;
+    int seed;
+
+};
+
 char* ExecuteDisk(int argc, char *argv[])
 {
-    struct Disk* disk = CreateDisk(SECTORS_PER_TRACK * CYLINDERS * SURFACES, BLOCKSIZE, CYLINDERS, SURFACES, SECTORS_PER_TRACK, RPM, SEARCH_OVERHEAD_TIME, TRANSFER_TIME, CYLINDER_TIME);
+    struct DiskOperation diskOperation;
+    diskOperation.diskMode = UnassignedDiskMode;
+    diskOperation.opType = UnassignedOpType;
+    diskOperation.saveFilePath = NULL;
+    diskOperation.readFilePath = NULL;
+    diskOperation.filePath = NULL;
+    diskOperation.useElevator = false;
+    diskOperation.randomAccess = false;
+    
+    diskOperation.cylinders = 
+    diskOperation.surfaces = 
+    diskOperation.sectorsPerTrack =
+    diskOperation.blockSize =
+    diskOperation.RPM = 
+    diskOperation.overheadTime =
+    diskOperation.transferTime = 
+    diskOperation.seekTime = 
+    diskOperation.sectorInterleaving = -1;
+    
+    static struct option long_options[] = 
+    {
+        {"load", required_argument, NULL, 'l' },
+        {"save", required_argument, NULL, 's' },
+        {"read", required_argument, NULL, 'r' },
+        {"write", required_argument, NULL, 'w' },        
+        {"create", no_argument, NULL, 'c' },
+        {"elevator", no_argument, NULL, 'e' },
+        {"random", required_argument, NULL, '0' },
+        {"cylinders", required_argument, NULL, '1'},
+        {"surfaces", required_argument, NULL, '2'},
+        {"sectorsPerTrack", required_argument, NULL, '3'},
+        {"blockSize", required_argument, NULL, '4'},
+        {"RPM", required_argument, NULL, '5'},
+        {"overheadTime", required_argument, NULL, '6'},
+        {"transferTime", required_argument, NULL, '7'},
+        {"seekTime", required_argument, NULL, '8'},
+        {"sectorInterleaving", required_argument, NULL, '9'},
+        {"filePath", required_argument, NULL, '!'},
+        {"seed", required_argument, NULL, '@'},
+        {NULL, 0, NULL,  0 }
+    };
+    int c;
+    int option_index = 0;
+    while ((c = getopt_long(argc, argv, "l:s:0rwce1:2:3:4:5:6:7:8:9:!:#:@:", long_options, &option_index)) != -1)
+    {       
+        switch (c)
+        {
+            case 'l':
+                if(diskOperation.diskMode != UnassignedDiskMode)
+                {
+                    printf("Option already defined, use load or create, not both\n");
+                    exit(EXIT_FAILURE);
+                }
+                diskOperation.readFilePath = optarg;
+                diskOperation.diskMode = LoadDiskMode;
+                break;
+            case 's':
+                diskOperation.saveFilePath = optarg;
+                break;
+            case 'r':
+                if(diskOperation.opType != UnassignedOpType)
+                {
+                    printf("Option already defined, use read or write, not both\n");
+                }
+                diskOperation.diskMode = ReadOpMode;
+                break;
+            case 'w':
+                if(diskOperation.opType != UnassignedOpType)
+                {
+                    printf("Option already defined, use read or write, not both\n");
+                }
+                diskOperation.diskMode = WriteOpMode;
+                break;
+            case 'c':
+                if(diskOperation.diskMode != UnassignedDiskMode)
+                {
+                    printf("Option already defined, use load or create, not both\n");
+                }
+                diskOperation.diskMode = CreateDiskMode;
+                break;
+            case 'e':
+                diskOperation.useElevator = true;
+                break;
+            case '0':
+                diskOperation.randomAccess = true;
+                break;
+            case '1':
+                diskOperation.cylinders = ExtractInt(optarg);
+                break;
+            case '2':
+                diskOperation.surfaces = ExtractInt(optarg);
+                break;
+            case '3':
+                diskOperation.sectorsPerTrack = ExtractInt(optarg);
+                break;
+            case '4':
+                diskOperation.blockSize = ExtractInt(optarg);
+                break;
+            case '5':
+                diskOperation.RPM = ExtractInt(optarg);
+                break;
+            case '6':
+                diskOperation.overheadTime = ExtractInt(optarg);
+                break;
+            case '7':
+                diskOperation.transferTime = ExtractInt(optarg);
+                break;
+            case '8':
+                diskOperation.seekTime = ExtractInt(optarg);      
+                break;
+            case '9':
+                diskOperation.sectorInterleaving = ExtractInt(optarg);
+                break;
+            case '!':
+                diskOperation.filePath = optarg;
+                break;
+            case '@':
+                diskOperation.seed = ExtractInt(optarg);
+                break;
+            default:
+                printf("Other: %i, %s\n", c, optarg);
+                break;
+        }
+    }
 
-    struct BufferQueue* schedulerBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Receiver");
-    struct DiskScheduler* diskScheduler = CreateDiskScheduler(disk, schedulerBufferQueue, SECTOR_INTERLEAVING, ELEVATOR_MESSAGES_WINDOW_SIZE, true);
+    struct Disk* disk = NULL;
+    if(diskOperation.diskMode == LoadDiskMode)
+    {
+        disk = CreateDiskFromFile(diskOperation.readFilePath);
+    }
+    else if (diskOperation.diskMode == CreateDiskMode)
+    {
+        if(diskOperation.blockSize == -1 || diskOperation.cylinders == -1 || diskOperation.surfaces == -1 || diskOperation.sectorsPerTrack == -1 || diskOperation.RPM == -1|| diskOperation.overheadTime == -1|| diskOperation.transferTime == -1)
+        {
+            printf("Missing arguments\n");
+            exit(EXIT_FAILURE);
+        }
+        int blocks = diskOperation.sectorsPerTrack * diskOperation.cylinders * diskOperation.surfaces;
+        disk = CreateDisk(blocks, diskOperation.blockSize, diskOperation.cylinders, diskOperation.surfaces, diskOperation.sectorsPerTrack, diskOperation.RPM, diskOperation.overheadTime, diskOperation.transferTime,(diskOperation.seekTime * 2)/diskOperation.cylinders);
+    }
+    if(diskOperation.sectorInterleaving == -1 || diskOperation.filePath == NULL)
+    {
+        printf("Missing argdsauments\n");
+        exit(EXIT_FAILURE);
+    }
+   
+    struct BufferQueue* schedulerBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE);
+    struct DiskScheduler* diskScheduler = CreateDiskScheduler(disk, schedulerBufferQueue, diskOperation.sectorInterleaving, ELEVATOR_MESSAGES_WINDOW_SIZE, diskOperation.useElevator);
 
-    struct BufferQueue* clientBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE, "Receiver");    
+    struct BufferQueue* clientBufferQueue = CreateBufferThreaded(MESSAGES_WINDOW_SIZE);    
     struct Client* client = CreateClient(clientBufferQueue);
 
     pthread_t scheduler = StartDiskScheduler(diskScheduler);
-    CopyFileToDisk(client, diskScheduler, "Samples/sample.txt", false);
+    CopyFileToDisk(client, diskScheduler, diskOperation.filePath, false);
     StopDiskScheduler(diskScheduler);
+    if(diskOperation.saveFilePath != NULL)
+    {
+        WriteDiskToFile(disk, diskOperation.saveFilePath);
+    }
     pthread_join(scheduler, NULL);
     DestroyClient(client);
     pthread_detach(scheduler);
     DestroyDiskScheduler(diskScheduler);
-    return "Ok\n";
+    return "";
 }
+
 char* ExecuteBenchmark(int argc, char *argv[])
 {
-    if(argc != 5)
+    static struct option long_options[] = 
     {
-        return "Invalid arguments to benchmark. Please Use -t (threaded) or -nt (non-threaded) and inform BufferSize, BlockSize";
-    }
-    
-    char* firstArg = argv[0];
+        {"thread", no_argument, NULL, 't'},
+        {"bufferSize", required_argument, NULL, '0'},
+        {"blockSize", required_argument, NULL,  '1'},
+        {"readers", required_argument, NULL, 'r'},
+        {"writers", required_argument, NULL, 'w'},        
+    };
 
-    int bufferSize = ExtractInt(argv[1]);
-    int blockSize = ExtractInt(argv[2]);
-    int readers = ExtractInt(argv[3]);
-    int writers = ExtractInt(argv[4]);
-    if(strcmp(firstArg, "-t") == 0)
+    int bufferSize = 0, blockSize = 0, readers = 0, writers = 0;
+    bool useThreads = false;
+    int c, option_index = 0;
+    while ((c = getopt_long(argc, argv, "t0:1:r:w:", long_options, &option_index)) != -1)
+    {       
+        switch (c)
+        {
+            case 't':
+                useThreads = true;
+                break;
+            case '0':
+                bufferSize = ExtractInt(optarg);
+                break;
+            case '1':
+                blockSize = ExtractInt(optarg);
+                break;
+            case 'r': 
+                readers = ExtractInt(optarg);
+                break;
+            case 'w': 
+                writers = ExtractInt(optarg);
+                break;
+            default:
+                break;
+        }
+    }
+    if(useThreads)
     {
+        if(blockSize == 0 || bufferSize == 0 || readers == 0 || writers == 0)
+        {
+            printf("Missing arguments\n");
+            exit(EXIT_FAILURE);
+        }
         int throughput = ThreadBenchmark(bufferSize, blockSize - 4, readers, writers);
         if(throughput == 0)
         {
@@ -89,9 +287,13 @@ char* ExecuteBenchmark(int argc, char *argv[])
         printf("Throughput: %s/s\n", throughputBuf);
         return "Threaded Benchmark succesfull\n";
     }
-
-    if(strcmp(firstArg, "-nt") == 0)
+    else
     {
+        if(bufferSize == 0 || blockSize == 0)
+        {
+            printf("Missing arguments\n");
+            exit(EXIT_FAILURE);
+        }
         int throughput = Benchmark(bufferSize, blockSize - 4);
         if(throughput == 0)
         {
@@ -105,70 +307,101 @@ char* ExecuteBenchmark(int argc, char *argv[])
         printf("Buffersize: %s Blocksize: %s Throughput: %s/s\n", bufferSizeBuf, blockSizeBuf, throughputBuf);
         return "Threaded Benchmark succesfull\n";
     }
-    
     return "Invalid parameter benchmark. Rerun with -t for threaded and -nt for non-threaded \n";
    
 }
 
 char* GenerateCSV(int argc, char *argv[])
 {
-    if(argc != 6)
+    static struct option long_options[] = 
     {
-        return "Invalid arguments to generate CSV. Please Use -t or -nt and inform MinBufferSize, MaxBufferSize, MinBlockSize, Reader threads and Writer threads\n";
-    }
-    int minBufSize = ExtractInt(argv[1]);
-    int maxBufSize = ExtractInt(argv[2]);
-    int minBlockSize = ExtractInt(argv[3]);
-    int readers = ExtractInt(argv[4]);
-    int writers = ExtractInt(argv[5]);
-    char* firstArg = argv[0];
+        {"thread", no_argument, NULL, 't'},
+        {"minBufSize", required_argument, NULL, '0'},
+        {"maxBufSize", required_argument, NULL,  '1'},
+        {"minBlockSize", required_argument, NULL, '2' },
+        {"readers", required_argument, NULL, 'r'},
+        {"writers", required_argument, NULL, 'w'},
+    };
 
-    if(strcmp(firstArg, "-t") == 0)
+    int minBufSize = 0, maxBufSize = 0, minBlockSize = 0, readers = 0, writers = 0;
+    bool useThreads = false;
+    int c, option_index = 0;
+    while ((c = getopt_long(argc, argv, "t0:1:2:r:w:", long_options, &option_index)) != -1)
+    {       
+        switch (c)
+        {
+            case 't':
+                useThreads = true;
+                break;
+            case '0':
+                minBufSize = ExtractInt(optarg);
+                break;
+            case '1':
+                maxBufSize = ExtractInt(optarg);
+                break;
+            case '2':
+                minBlockSize = ExtractInt(optarg);
+                break;
+            case 'r': 
+                readers = ExtractInt(optarg);
+                break;
+            case 'w': 
+                writers = ExtractInt(optarg);
+                break;
+            default:
+                break;
+        }
+    }
+    if(useThreads)
     {
+        if(minBufSize == 0 || maxBufSize == 0 || minBlockSize == 0 || readers == 0 || writers == 0)
+        {
+            printf("Missing arguments\n");
+            exit(EXIT_FAILURE);
+        }
         CSVThreaded(minBufSize, maxBufSize, minBlockSize, readers, writers);
-        return "Threaded CSV generated with success\n";
     }
-
-    if(strcmp(firstArg, "-nt") == 0)
+    else
     {
+        if(minBufSize == 0 || maxBufSize == 0 || minBlockSize == 0)
+        {
+            printf("Missing arguments\n");
+            exit(EXIT_FAILURE);
+        }
         CSVNonThreaded(minBufSize, maxBufSize, minBlockSize);
-        return "CSV generated with success\n";
     }
-    
-    return "Invalid parameter for CSV. Rerun with -t for threaded and -nt for non-threaded \n";
+    return "";
 }
 
 char* Execute(int argc, char *argv[])
 {
-    if(argc == 0)
+    static struct option long_options[] = 
     {
-        return "No arguments passed to program\nYou can use -csv to generate a csv with benchmarks or -benchmark to run only one time. Also check -disk to copy files\n";
-    }
+        {"csv", no_argument, NULL, 'z'},
+        {"benchmark", no_argument, NULL,  'b'},
+        {"disk", no_argument, NULL, 'd'}
+    };
 
-    char* firstArg = argv[0];
-
-    if(strcmp(firstArg, "-csv") == 0)
+    int option_index = 0;
+    int c = getopt_long(argc, argv, "zbd", long_options, &option_index);
+    switch (c)
     {
-        return GenerateCSV(argc - 1, argv + 1);
+        case 'z':
+            return GenerateCSV(argc, argv);
+        case 'b':
+            return ExecuteBenchmark(argc - 1, argv + 1);
+        case 'd':
+            return ExecuteDisk(argc, argv);
+        default:
+            break;
     }
-
-    if(strcmp(firstArg, "-benchmark") == 0)
-    {
-        return ExecuteBenchmark(argc - 1, argv + 1);
-    }
-
-    if(strcmp(firstArg, "-disk") == 0)
-    {
-        return ExecuteDisk(argc - 1, argv + 1);
-    }
-    return "Invalid arguments\n";
+    printf("%c, %i", c,c );
+    return "No arguments passed to program\nYou can use --csv to generate a csv with benchmarks or --benchmark to run only one time. Also check --disk to copy files\n";
 }
 
 int main(int argc, char *argv[])
 {
-    /* First argument is the program name itself */
-    char* returnedMessage = Execute(argc - 1, argv + 1);
-
+    char* returnedMessage = Execute(argc, argv);
     printf("%s", returnedMessage);
     return 0;
 }

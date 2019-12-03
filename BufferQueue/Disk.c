@@ -35,6 +35,56 @@ void DestroyDisk(struct Disk* disk)
     free(disk);
 }
 
+struct Disk* CreateDiskFromFile(char *fileName)
+{
+    FILE *file = fopen(fileName, "r");
+    if (file == NULL)
+    {
+        return NULL;
+    }
+    struct Disk diskHeader;
+    if (fread(&diskHeader, sizeof(diskHeader), 1, file) != 1) 
+    {
+        fclose(file);
+        return NULL;
+    }
+    if (diskHeader.diskIdentifier != DISK_ID) 
+    {
+        fclose(file);
+        return NULL;
+    }
+    struct Disk *disk = malloc(diskHeader.blocks * diskHeader.blockSize);
+    if (disk == NULL) 
+    {
+        fclose(file);
+        return NULL;
+    }
+    rewind(file);
+    if (fread(disk, diskHeader.blockSize, diskHeader.blocks, file) != diskHeader.blocks) 
+    {
+        free(disk);
+        fclose(file);
+        return NULL;
+    }
+    fclose(file);
+    return disk;
+}
+
+void WriteDiskToFile(struct Disk* disk, char* filename)
+{
+    if(disk->diskIdentifier == DISK_ID)
+    {
+        return;
+    }
+    FILE* file = fopen(filename, "w");
+    if(file == NULL)
+    {
+        return;
+    }
+    fwrite(disk, disk->blockSize, disk->blocks, file);
+    fclose(file);
+}
+
 double Now()
 {
     struct timespec ts;

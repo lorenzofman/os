@@ -122,5 +122,6 @@ void StopDiskScheduler(struct DiskScheduler* scheduler)
 {
     struct Message message;
     message.messageType = StopSchedulerType;
+    message.diskBlock = scheduler->elevator->previousBlock;
     EnqueueThread_B(scheduler->receiver, (byte*) &message, sizeof(struct Message));
 }

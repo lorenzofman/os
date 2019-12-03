@@ -86,7 +86,7 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     if(file == NULL)
     {
         printf("File doesn't exist\n");
-        return;
+        exit(EXIT_FAILURE);
     }
     while (!feof(file) && !ferror(file)) 
     {
@@ -128,7 +128,6 @@ void CopyFileToDisk(struct Client* client, struct DiskScheduler * scheduler, con
     double elapsed = (finish.tv_sec - start.tv_sec);
     elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
     printf("Copied file in %lf ms\n", elapsed * 1e3);
-    printf("Velocity: %lf\n", elapsed * 1e3);
 
     for (int i = 0; i < blocks; i++)
     {
