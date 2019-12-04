@@ -1,0 +1,31 @@
+| means concurrently code execution
+Blocking Example (tickets are examples):
+
+Buffer is full
+
+W1 W2 R1
+
+W1 acquires ticket (42) and waits for it's turn
+W2 acquires ticket (43) and waits for it's turn
+R1 acquires ticket (44) and waits for it's turn
+W1 turn
+W1 can't write because buffer is full
+W1 get write ticket (20) (Global is 19)
+PendingWrites = 1 
+W1 releases global ticket (42) (Ticket now is 43)
+
+W1 waits for write turn | W2 turn
+W2 can't write because buffer is full
+W2 get write ticket (21)
+PendingWrites = 2 
+W2 releases global ticket (43) (Ticket now is 44)
+
+
+R1 turn
+R1 can read data
+Read data
+Before releasing global ticket check for PendingWrites
+There are PendingWrites so increment writeticket
+Wait for all pending writes and reads
+W1 releases global ticket (44) (Ticket now is 45)
+
